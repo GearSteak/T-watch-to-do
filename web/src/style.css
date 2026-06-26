@@ -303,6 +303,31 @@ button:hover {
   color: #e8e8f0;
 }
 
+.todo-repeat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.todo-repeat-sub[hidden] {
+  display: none;
+}
+
+.todo-repeat-sub {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f0f1a;
+  color: #e8e8f0;
+  max-width: 6.5rem;
+}
+
+.todo-repeat-interval {
+  width: 3.5rem;
+}
+
 .todo-daily-row {
   margin: 0.5rem 0;
 }

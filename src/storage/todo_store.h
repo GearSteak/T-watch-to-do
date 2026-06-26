@@ -12,6 +12,7 @@ struct TodoItem {
     uint8_t repeat = 0; // TODO_REPEAT_*
     uint8_t repeatWeekday = 0; // 0=Sun .. 6=Sat (weekly)
     uint16_t repeatIntervalDays = 0; // every N days (interval)
+    uint8_t repeatMonthDay = 0; // 1..31 (monthly; 31 -> last day in short months)
     int sortOrder = 0;
     uint64_t createdAt = 0;
     uint64_t completedAt = 0;

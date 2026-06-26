@@ -39,6 +39,28 @@ static int daysBetweenYmd(uint32_t fromYmd, uint32_t toYmd) {
     return (int)(diff / 86400.0);
 }
 
+static int daysInMonth(int year, int month) {
+    static const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (month < 1 || month > 12) {
+        return 31;
+    }
+    if (month == 2) {
+        const bool leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        return leap ? 29 : 28;
+    }
+    return days[month - 1];
+}
+
+static int monthlyTriggerDay(const struct tm &todayTm, uint8_t repeatMonthDay) {
+    if (repeatMonthDay < 1 || repeatMonthDay > 31) {
+        return -1;
+    }
+    const int year = todayTm.tm_year + 1900;
+    const int month = todayTm.tm_mon + 1;
+    const int dim = daysInMonth(year, month);
+    return repeatMonthDay > (uint8_t)dim ? dim : repeatMonthDay;
+}
+
 static int nextSortOrder(const std::vector<TodoItem> &items) {
     int maxOrder = -1;
     for (const TodoItem &item : items) {
@@ -111,6 +133,7 @@ bool TodoStore::load() {
         item.repeat = obj["repeat"] | 0;
         item.repeatWeekday = obj["repeatWeekday"] | 0;
         item.repeatIntervalDays = obj["repeatIntervalDays"] | 0;
+        item.repeatMonthDay = obj["repeatMonthDay"] | 0;
         item.sortOrder = obj["sortOrder"] | 0;
         item.createdAt = obj["createdAt"] | 0ULL;
         item.completedAt = obj["completedAt"] | 0ULL;
@@ -141,6 +164,7 @@ bool TodoStore::save() {
         obj["repeat"] = item.repeat;
         obj["repeatWeekday"] = item.repeatWeekday;
         obj["repeatIntervalDays"] = item.repeatIntervalDays;
+        obj["repeatMonthDay"] = item.repeatMonthDay;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;
@@ -304,6 +328,7 @@ bool TodoStore::mergeFromJson(const String &json, size_t *addedCount) {
             existing->repeat = obj["repeat"] | existing->repeat;
             existing->repeatWeekday = obj["repeatWeekday"] | existing->repeatWeekday;
             existing->repeatIntervalDays = obj["repeatIntervalDays"] | existing->repeatIntervalDays;
+            existing->repeatMonthDay = obj["repeatMonthDay"] | existing->repeatMonthDay;
             existing->sortOrder = obj["sortOrder"] | existing->sortOrder;
             existing->completedAt = obj["completedAt"] | 0ULL;
         } else if (items_.size() < MAX_TODOS) {
@@ -315,6 +340,7 @@ bool TodoStore::mergeFromJson(const String &json, size_t *addedCount) {
             item.repeat = obj["repeat"] | 0;
             item.repeatWeekday = obj["repeatWeekday"] | 0;
             item.repeatIntervalDays = obj["repeatIntervalDays"] | 0;
+            item.repeatMonthDay = obj["repeatMonthDay"] | 0;
             item.sortOrder = obj["sortOrder"] | nextSortOrder(items_);
             item.createdAt = obj["createdAt"] | (uint64_t)time(nullptr) * 1000ULL;
             item.completedAt = obj["completedAt"] | 0ULL;
@@ -396,6 +422,13 @@ void TodoStore::processRepeats() {
                 }
             }
             break;
+        case TODO_REPEAT_MONTHLY: {
+            const int triggerDay = monthlyTriggerDay(todayTm, item.repeatMonthDay);
+            if (triggerDay > 0 && todayTm.tm_mday == triggerDay) {
+                shouldReset = true;
+            }
+            break;
+        }
         default:
             break;
         }
@@ -428,6 +461,7 @@ String TodoStore::toJson() const {
         obj["repeat"] = item.repeat;
         obj["repeatWeekday"] = item.repeatWeekday;
         obj["repeatIntervalDays"] = item.repeatIntervalDays;
+        obj["repeatMonthDay"] = item.repeatMonthDay;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;

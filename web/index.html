@@ -41,10 +41,11 @@
                 <option value="1">Daily</option>
                 <option value="2">Weekly on…</option>
                 <option value="3">Every N days</option>
+                <option value="4">Monthly on day…</option>
               </select>
             </label>
             <label id="repeat-weekly-wrap" hidden>
-              Day
+              Weekday
               <select id="todo-repeat-weekday">
                 <option value="0">Sunday</option>
                 <option value="1">Monday</option>
@@ -56,14 +57,19 @@
               </select>
             </label>
             <label id="repeat-interval-wrap" hidden>
-              Days
+              Every
               <input id="todo-repeat-days" type="number" min="2" max="365" value="3" />
+              days
+            </label>
+            <label id="repeat-monthly-wrap" hidden>
+              Day of month
+              <select id="todo-repeat-monthday"></select>
             </label>
           </div>
           <button type="submit" class="primary">Add</button>
         </form>
         <h3>Active</h3>
-        <p class="hint">Higher priority items appear first. Repeating tasks come back after you check them off.</p>
+        <p class="hint">Higher priority items appear first. Repeating tasks come back after you check them off (daily, weekly, every N days, or monthly).</p>
         <ul id="todo-active" class="todo-list"></ul>
         <h3>Completed</h3>
         <ul id="todo-completed" class="todo-list completed"></ul>

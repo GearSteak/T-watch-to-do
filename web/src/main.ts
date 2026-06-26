@@ -17,8 +17,10 @@ const todoInput = document.getElementById("todo-input") as HTMLInputElement;
 const todoRepeat = document.getElementById("todo-repeat") as HTMLSelectElement;
 const todoRepeatWeekday = document.getElementById("todo-repeat-weekday") as HTMLSelectElement;
 const todoRepeatDays = document.getElementById("todo-repeat-days") as HTMLInputElement;
+const todoRepeatMonthday = document.getElementById("todo-repeat-monthday") as HTMLSelectElement;
 const repeatWeeklyWrap = document.getElementById("repeat-weekly-wrap")!;
 const repeatIntervalWrap = document.getElementById("repeat-interval-wrap")!;
+const repeatMonthlyWrap = document.getElementById("repeat-monthly-wrap")!;
 const todoActive = document.getElementById("todo-active")!;
 const todoCompleted = document.getElementById("todo-completed")!;
 const btnRefreshTodos = document.getElementById("btn-refresh-todos") as HTMLButtonElement;
@@ -71,6 +73,99 @@ function errMessage(err: unknown): string {
 
 const PRIORITY_LABELS = ["None", "Low", "Medium", "High"] as const;
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const REPEAT_OPTIONS: { value: TodoItem["repeat"]; label: string }[] = [
+  { value: 0, label: "Once" },
+  { value: 1, label: "Daily" },
+  { value: 2, label: "Weekly" },
+  { value: 3, label: "Every N days" },
+  { value: 4, label: "Monthly" },
+];
+
+type RepeatFields = Pick<TodoItem, "repeat" | "repeatWeekday" | "repeatIntervalDays" | "repeatMonthDay">;
+
+function fillMonthDaySelect(select: HTMLSelectElement, selected = 1) {
+  select.innerHTML = "";
+  for (let day = 1; day <= 31; day += 1) {
+    const opt = document.createElement("option");
+    opt.value = String(day);
+    opt.textContent = day === 31 ? "31 (or last day)" : String(day);
+    select.appendChild(opt);
+  }
+  select.value = String(Math.max(1, Math.min(31, selected)));
+}
+
+fillMonthDaySelect(todoRepeatMonthday, 1);
+
+function applyRepeatMode(fields: RepeatFields, mode: TodoItem["repeat"], overrides?: Partial<RepeatFields>): RepeatFields {
+  const next: RepeatFields = {
+    repeat: mode,
+    repeatWeekday: 0,
+    repeatIntervalDays: 0,
+    repeatMonthDay: 0,
+  };
+  if (mode === 2) {
+    next.repeatWeekday = overrides?.repeatWeekday ?? fields.repeatWeekday ?? 1;
+  } else if (mode === 3) {
+    next.repeatIntervalDays = Math.max(2, overrides?.repeatIntervalDays ?? fields.repeatIntervalDays ?? 3);
+  } else if (mode === 4) {
+    next.repeatMonthDay = Math.max(1, Math.min(31, overrides?.repeatMonthDay ?? fields.repeatMonthDay ?? 1));
+  }
+  return next;
+}
+
+function createRepeatModeSelect(value: TodoItem["repeat"], className = "todo-repeat"): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.className = className;
+  for (const opt of REPEAT_OPTIONS) {
+    const el = document.createElement("option");
+    el.value = String(opt.value);
+    el.textContent = opt.label;
+    select.appendChild(el);
+  }
+  select.value = String(value);
+  return select;
+}
+
+function createWeekdaySelect(value: number): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.className = "todo-repeat-sub todo-repeat-weekday";
+  for (let d = 0; d < WEEKDAY_LABELS.length; d += 1) {
+    const opt = document.createElement("option");
+    opt.value = String(d);
+    opt.textContent = WEEKDAY_LABELS[d];
+    select.appendChild(opt);
+  }
+  select.value = String(value);
+  return select;
+}
+
+function createIntervalInput(value: number): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "2";
+  input.max = "365";
+  input.value = String(Math.max(2, value || 3));
+  input.className = "todo-repeat-sub todo-repeat-interval";
+  return input;
+}
+
+function createMonthDaySelect(value: number): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.className = "todo-repeat-sub todo-repeat-monthday";
+  fillMonthDaySelect(select, value || 1);
+  return select;
+}
+
+function updateRepeatSubVisibility(
+  mode: number,
+  weekdayEl: HTMLElement,
+  intervalEl: HTMLElement,
+  monthDayEl: HTMLElement,
+) {
+  weekdayEl.hidden = mode !== 2;
+  intervalEl.hidden = mode !== 3;
+  monthDayEl.hidden = mode !== 4;
+}
 
 function normalizeTodo(item: TodoItem): TodoItem {
   return {
@@ -79,15 +174,17 @@ function normalizeTodo(item: TodoItem): TodoItem {
     repeat: (item.repeat ?? 0) as TodoItem["repeat"],
     repeatWeekday: item.repeatWeekday ?? 0,
     repeatIntervalDays: item.repeatIntervalDays ?? 0,
+    repeatMonthDay: item.repeatMonthDay ?? 0,
     sortOrder: item.sortOrder ?? 0,
   };
 }
 
 function repeatPrefix(item: TodoItem): string {
   if (!item.repeat) return "";
-  if (item.repeat === 1) return "↻ ";
-  if (item.repeat === 2) return `↻${WEEKDAY_LABELS[item.repeatWeekday ?? 0]} `;
-  if (item.repeat === 3) return `↻${item.repeatIntervalDays || 3}d `;
+  if (item.repeat === 1) return "↻ daily ";
+  if (item.repeat === 2) return `↻ ${WEEKDAY_LABELS[item.repeatWeekday ?? 0]} `;
+  if (item.repeat === 3) return `↻ every ${item.repeatIntervalDays || 3}d `;
+  if (item.repeat === 4) return `↻ day ${item.repeatMonthDay || 1} `;
   return "↻ ";
 }
 
@@ -95,18 +192,27 @@ function updateRepeatFormVisibility() {
   const mode = Number(todoRepeat.value);
   repeatWeeklyWrap.hidden = mode !== 2;
   repeatIntervalWrap.hidden = mode !== 3;
+  repeatMonthlyWrap.hidden = mode !== 4;
 }
 
-function readRepeatFromForm(): Pick<TodoItem, "repeat" | "repeatWeekday" | "repeatIntervalDays"> {
+function readRepeatFromForm(): RepeatFields {
   const repeat = Number(todoRepeat.value) as TodoItem["repeat"];
   if (repeat === 2) {
-    return { repeat, repeatWeekday: Number(todoRepeatWeekday.value), repeatIntervalDays: 0 };
+    return { repeat, repeatWeekday: Number(todoRepeatWeekday.value), repeatIntervalDays: 0, repeatMonthDay: 0 };
   }
   if (repeat === 3) {
     const days = Math.max(2, Math.min(365, Number(todoRepeatDays.value) || 3));
-    return { repeat, repeatWeekday: 0, repeatIntervalDays: days };
+    return { repeat, repeatWeekday: 0, repeatIntervalDays: days, repeatMonthDay: 0 };
   }
-  return { repeat, repeatWeekday: 0, repeatIntervalDays: 0 };
+  if (repeat === 4) {
+    return {
+      repeat,
+      repeatWeekday: 0,
+      repeatIntervalDays: 0,
+      repeatMonthDay: Number(todoRepeatMonthday.value) || 1,
+    };
+  }
+  return { repeat, repeatWeekday: 0, repeatIntervalDays: 0, repeatMonthDay: 0 };
 }
 
 todoRepeat.addEventListener("change", updateRepeatFormVisibility);
@@ -203,31 +309,46 @@ function renderTodos() {
       );
       li.appendChild(priority);
 
-      const repeat = document.createElement("select");
-      repeat.className = "todo-repeat";
-      for (const [value, label] of [
-        ["0", "Once"],
-        ["1", "Daily"],
-        ["2", "Weekly"],
-        ["3", "Every N days"],
-      ] as const) {
-        const opt = document.createElement("option");
-        opt.value = value;
-        opt.textContent = label;
-        repeat.appendChild(opt);
-      }
-      repeat.value = String(item.repeat ?? 0);
-      repeat.addEventListener("change", () => {
-        const mode = Number(repeat.value) as TodoItem["repeat"];
-        if (mode === 2) {
-          setTodoRepeat(item.id, mode, { repeatWeekday: item.repeatWeekday ?? 1 });
-        } else if (mode === 3) {
-          setTodoRepeat(item.id, mode, { repeatIntervalDays: item.repeatIntervalDays || 3 });
-        } else {
-          setTodoRepeat(item.id, mode);
-        }
+      const repeatControls = document.createElement("div");
+      repeatControls.className = "todo-repeat-controls";
+
+      const repeatSelect = createRepeatModeSelect((item.repeat ?? 0) as TodoItem["repeat"]);
+      const weekdaySelect = createWeekdaySelect(item.repeatWeekday ?? 1);
+      const intervalInput = createIntervalInput(item.repeatIntervalDays ?? 3);
+      const monthDaySelect = createMonthDaySelect(item.repeatMonthDay ?? 1);
+
+      updateRepeatSubVisibility(
+        item.repeat ?? 0,
+        weekdaySelect,
+        intervalInput,
+        monthDaySelect,
+      );
+
+      const syncRepeat = (overrides?: Partial<RepeatFields>) => {
+        const mode = Number(repeatSelect.value) as TodoItem["repeat"];
+        void setTodoRepeat(item.id, mode, {
+          repeatWeekday: Number(weekdaySelect.value),
+          repeatIntervalDays: Number(intervalInput.value),
+          repeatMonthDay: Number(monthDaySelect.value),
+          ...overrides,
+        });
+      };
+
+      repeatSelect.addEventListener("change", () => {
+        const mode = Number(repeatSelect.value);
+        updateRepeatSubVisibility(mode, weekdaySelect, intervalInput, monthDaySelect);
+        syncRepeat();
       });
-      li.appendChild(repeat);
+      weekdaySelect.addEventListener("change", () => syncRepeat({ repeatWeekday: Number(weekdaySelect.value) }));
+      intervalInput.addEventListener("change", () =>
+        syncRepeat({ repeatIntervalDays: Math.max(2, Number(intervalInput.value) || 3) }),
+      );
+      monthDaySelect.addEventListener("change", () =>
+        syncRepeat({ repeatMonthDay: Number(monthDaySelect.value) }),
+      );
+
+      repeatControls.append(repeatSelect, weekdaySelect, intervalInput, monthDaySelect);
+      li.appendChild(repeatControls);
     }
 
     const cb = document.createElement("input");
@@ -431,22 +552,21 @@ async function setTodoPriority(id: string, priority: TodoItem["priority"]) {
 async function setTodoRepeat(
   id: string,
   repeat: TodoItem["repeat"],
-  extra?: { repeatWeekday?: number; repeatIntervalDays?: number },
+  extra?: Partial<RepeatFields>,
 ) {
   todos = todos.map((t) => {
     if (t.id !== id) return t;
-    const next: TodoItem = { ...t, repeat };
-    if (repeat === 2) {
-      next.repeatWeekday = extra?.repeatWeekday ?? t.repeatWeekday ?? 1;
-      next.repeatIntervalDays = 0;
-    } else if (repeat === 3) {
-      next.repeatIntervalDays = Math.max(2, extra?.repeatIntervalDays ?? t.repeatIntervalDays ?? 3);
-      next.repeatWeekday = 0;
-    } else {
-      next.repeatWeekday = 0;
-      next.repeatIntervalDays = 0;
-    }
-    return next;
+    const fields = applyRepeatMode(
+      {
+        repeat: t.repeat ?? 0,
+        repeatWeekday: t.repeatWeekday ?? 0,
+        repeatIntervalDays: t.repeatIntervalDays ?? 0,
+        repeatMonthDay: t.repeatMonthDay ?? 0,
+      },
+      repeat,
+      extra,
+    );
+    return { ...t, ...fields };
   });
   renderTodos();
   await syncTodosToWatch();

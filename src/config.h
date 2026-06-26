@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "0.1.15"
+#define FIRMWARE_VERSION "0.1.16"
 #define DEVICE_NAME "TWatch-Companion"
 
 #define SVC_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -48,6 +48,7 @@
 #define TODO_REPEAT_DAILY 1
 #define TODO_REPEAT_WEEKLY 2
 #define TODO_REPEAT_INTERVAL 3
+#define TODO_REPEAT_MONTHLY 4
 
 #define MAX_ALARMS 8
 #define ALARM_LABEL_MAX 40

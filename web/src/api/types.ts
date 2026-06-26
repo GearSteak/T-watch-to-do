@@ -17,7 +17,7 @@ export interface DeviceInfo {
 
 export type TodoPriority = 0 | 1 | 2 | 3;
 
-export type TodoRepeat = 0 | 1 | 2 | 3;
+export type TodoRepeat = 0 | 1 | 2 | 3 | 4;
 
 export interface TodoItem {
   id: string;
@@ -27,6 +27,7 @@ export interface TodoItem {
   repeat: TodoRepeat;
   repeatWeekday?: number;
   repeatIntervalDays?: number;
+  repeatMonthDay?: number;
   sortOrder: number;
   createdAt: number;
   completedAt: number;
