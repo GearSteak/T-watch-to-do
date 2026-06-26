@@ -1,0 +1,281 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0f0f1a;
+  color: #e8e8f0;
+  line-height: 1.5;
+}
+
+#app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+header {
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+h3 {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.95rem;
+  color: #aaa;
+}
+
+.muted {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #777;
+  margin: 0.75rem 0 0;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  background: #333;
+  color: #fff;
+}
+
+button.primary {
+  background: #4a6cf7;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid #3a3a52;
+  color: #aab;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+#todo-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+#todo-input {
+  flex: 1;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 0.6rem;
+  background: #0f0f1a;
+  color: #fff;
+}
+
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.todo-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.todo-move {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.todo-move-btn {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  min-width: 1.6rem;
+}
+
+.todo-move-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.todo-priority {
+  font-size: 0.8rem;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f0f1a;
+  color: #fff;
+  max-width: 5.5rem;
+}
+
+.todo-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-list li.priority-high .todo-text {
+  color: #ff8888;
+}
+
+.todo-list li.priority-medium .todo-text {
+  color: #ffcc66;
+}
+
+.todo-list li.priority-low .todo-text {
+  color: #88bbff;
+}
+
+.todo-list.completed li {
+  color: #888;
+  text-decoration: line-through;
+}
+
+.todo-list input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff4444;
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  z-index: 100;
+}
+
+.battery-ok { color: #88ff88; }
+.battery-warn { color: #ffaa00; }
+.battery-low { color: #ff4444; }
+
+.watchface-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+#face-preview {
+  border-radius: 12px;
+  border: 2px solid #333;
+  background: #0f0f1a;
+  flex-shrink: 0;
+}
+
+.watchface-controls {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.watchface-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.watchface-controls select,
+.watchface-controls input[type="color"] {
+  padding: 0.4rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f0f1a;
+  color: #fff;
+}
+
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.field-label {
+  font-size: 0.9rem;
+}
+
+.face-image-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #2a2a3e;
+}
+
+.face-image-group input[type="file"] {
+  font-size: 0.85rem;
+  color: #ccc;
+}
+
+.face-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.upload-progress {
+  height: 8px;
+  background: #0f0f1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#upload-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #4a6cf7;
+  transition: width 0.1s linear;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+}

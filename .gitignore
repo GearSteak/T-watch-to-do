@@ -1,0 +1,16 @@
+# PlatformIO build artifacts and downloaded libraries (huge, regenerated)
+.pio/
+
+# Node / web build
+web/node_modules/
+web/dist/
+node_modules/
+
+# Vite self-signed cert cache
+**/.vite/
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

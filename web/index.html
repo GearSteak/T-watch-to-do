@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T-Watch Companion</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>T-Watch Companion</h1>
+        <div id="device-status" class="muted">Not connected</div>
+      </header>
+
+      <section class="card">
+        <button id="btn-connect" class="primary">Connect via Bluetooth</button>
+        <p class="hint">
+          Use Chrome or Edge on desktop/Android. iPhone: use WiFi setup mode (Phase 2) or Bluefy browser.
+        </p>
+      </section>
+
+      <section class="card" id="time-section" hidden>
+        <h2>Watch Time</h2>
+        <p>Current browser time: <strong id="browser-time">--</strong></p>
+        <button id="btn-set-time">Set watch to this time</button>
+      </section>
+
+      <section class="card" id="todo-section" hidden>
+        <div class="section-head">
+          <h2>To-Do List</h2>
+          <button id="btn-refresh-todos" type="button" class="ghost">Refresh from watch</button>
+        </div>
+        <form id="todo-form">
+          <input id="todo-input" type="text" placeholder="Add a task..." maxlength="120" required />
+          <button type="submit" class="primary">Add</button>
+        </form>
+        <h3>Active</h3>
+        <p class="hint">Higher priority items appear first. Use arrows to reorder within the same priority.</p>
+        <ul id="todo-active" class="todo-list"></ul>
+        <h3>Completed</h3>
+        <ul id="todo-completed" class="todo-list completed"></ul>
+      </section>
+
+      <section class="card" id="watchface-section" hidden>
+        <h2>Watch Face</h2>
+        <div class="watchface-editor">
+          <canvas id="face-preview" width="240" height="240"></canvas>
+          <div class="watchface-controls">
+            <label>
+              Style
+              <select id="face-preset">
+                <option value="classic">Classic</option>
+                <option value="minimal">Minimal</option>
+                <option value="bold">Bold</option>
+              </select>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="face-show-date" checked />
+              Show date
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="face-show-battery" checked />
+              Show battery
+            </label>
+            <label>
+              Background
+              <input type="color" id="face-bg" value="#0f0f1a" />
+            </label>
+            <label>
+              Time color
+              <input type="color" id="face-time-color" value="#ffffff" />
+            </label>
+            <label>
+              Date color
+              <input type="color" id="face-date-color" value="#aaaaaa" />
+            </label>
+
+            <div class="face-image-group">
+              <span class="field-label">Background image</span>
+              <input type="file" id="face-image-input" accept="image/*" />
+              <p class="hint">Image is cropped to a 240×240 square and shown behind the clock.</p>
+              <div class="face-image-actions">
+                <button id="btn-upload-image" class="primary" disabled>Upload image to watch</button>
+                <button id="btn-clear-image" class="ghost">Remove image</button>
+              </div>
+              <div id="upload-progress" class="upload-progress" hidden>
+                <div id="upload-progress-bar"></div>
+              </div>
+            </div>
+
+            <button id="btn-sync-face" class="primary">Sync to watch</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="toast" class="toast" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
