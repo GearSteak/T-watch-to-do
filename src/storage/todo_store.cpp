@@ -4,8 +4,16 @@
 #include <FFat.h>
 #include <ArduinoJson.h>
 #include <algorithm>
+#include <time.h>
 
 TodoStore todoStore;
+
+static uint32_t currentYmd() {
+    const time_t now = time(nullptr);
+    struct tm t;
+    localtime_r(&now, &t);
+    return (uint32_t)((t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday);
+}
 
 static int nextSortOrder(const std::vector<TodoItem> &items) {
     int maxOrder = -1;
@@ -68,12 +76,15 @@ bool TodoStore::load() {
         return false;
     }
 
+    lastDailyResetYmd_ = doc["lastDailyResetYmd"] | 0U;
+
     for (JsonObject obj : doc["items"].as<JsonArray>()) {
         TodoItem item;
         item.id = obj["id"].as<String>();
         item.text = obj["text"].as<String>();
         item.done = obj["done"] | false;
         item.priority = obj["priority"] | 0;
+        item.repeat = obj["repeat"] | 0;
         item.sortOrder = obj["sortOrder"] | 0;
         item.createdAt = obj["createdAt"] | 0ULL;
         item.completedAt = obj["completedAt"] | 0ULL;
@@ -93,6 +104,7 @@ bool TodoStore::save() {
     }
 
     JsonDocument doc;
+    doc["lastDailyResetYmd"] = lastDailyResetYmd_;
     JsonArray arr = doc["items"].to<JsonArray>();
     for (const TodoItem &item : items_) {
         JsonObject obj = arr.add<JsonObject>();
@@ -100,6 +112,7 @@ bool TodoStore::save() {
         obj["text"] = item.text;
         obj["done"] = item.done;
         obj["priority"] = item.priority;
+        obj["repeat"] = item.repeat;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;
@@ -247,6 +260,7 @@ bool TodoStore::mergeFromJson(const String &json) {
             existing->text = obj["text"].as<String>();
             existing->done = obj["done"] | false;
             existing->priority = obj["priority"] | existing->priority;
+            existing->repeat = obj["repeat"] | existing->repeat;
             existing->sortOrder = obj["sortOrder"] | existing->sortOrder;
             existing->completedAt = obj["completedAt"] | 0ULL;
         } else if (items_.size() < MAX_TODOS) {
@@ -255,6 +269,7 @@ bool TodoStore::mergeFromJson(const String &json) {
             item.text = obj["text"].as<String>();
             item.done = obj["done"] | false;
             item.priority = obj["priority"] | 0;
+            item.repeat = obj["repeat"] | 0;
             item.sortOrder = obj["sortOrder"] | nextSortOrder(items_);
             item.createdAt = obj["createdAt"] | (uint64_t)time(nullptr) * 1000ULL;
             item.completedAt = obj["completedAt"] | 0ULL;
@@ -269,14 +284,43 @@ bool TodoStore::mergeFromJson(const String &json) {
 
 bool TodoStore::clearAll() {
     items_.clear();
+    lastDailyResetYmd_ = 0;
     if (FFat.exists(TODO_FILE)) {
         FFat.remove(TODO_FILE);
     }
     return save();
 }
 
+void TodoStore::processRepeats() {
+    const uint32_t today = currentYmd();
+    if (lastDailyResetYmd_ == 0) {
+        lastDailyResetYmd_ = today;
+        save();
+        return;
+    }
+    if (today <= lastDailyResetYmd_) {
+        return;
+    }
+
+    bool changed = false;
+    for (TodoItem &item : items_) {
+        if (item.repeat == TODO_REPEAT_DAILY && item.done) {
+            item.done = false;
+            item.completedAt = 0;
+            changed = true;
+        }
+    }
+    lastDailyResetYmd_ = today;
+    if (changed) {
+        notifyChange();
+    } else {
+        save();
+    }
+}
+
 String TodoStore::toJson() const {
     JsonDocument doc;
+    doc["lastDailyResetYmd"] = lastDailyResetYmd_;
     JsonArray arr = doc["items"].to<JsonArray>();
     for (const TodoItem &item : items_) {
         JsonObject obj = arr.add<JsonObject>();
@@ -284,6 +328,7 @@ String TodoStore::toJson() const {
         obj["text"] = item.text;
         obj["done"] = item.done;
         obj["priority"] = item.priority;
+        obj["repeat"] = item.repeat;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;

@@ -9,6 +9,7 @@ struct TodoItem {
     String text;
     bool done = false;
     uint8_t priority = 0; // 0=none, 1=low, 2=medium, 3=high
+    uint8_t repeat = 0; // 0=none, 1=daily
     int sortOrder = 0;
     uint64_t createdAt = 0;
     uint64_t completedAt = 0;
@@ -31,6 +32,7 @@ public:
     bool move(const String &id, int direction);
     bool mergeFromJson(const String &json);
     bool clearAll();
+    void processRepeats();
     String toJson() const;
     String completedLogJson(int limit = 20) const;
 
@@ -38,6 +40,7 @@ public:
 
 private:
     std::vector<TodoItem> items_;
+    uint32_t lastDailyResetYmd_ = 0;
     std::function<void()> onChange_;
     void notifyChange();
     TodoItem *findById(const String &id);

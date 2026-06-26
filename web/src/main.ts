@@ -1,6 +1,6 @@
 import { BleClient } from "./ble/client";
 import { WATCHFACE_IMAGE_W } from "./api/types";
-import type { TodoItem, TodoPayload, WatchfaceConfig } from "./api/types";
+import type { TodoItem, TodoPayload, WatchfaceConfig, AlarmItem, AlarmPayload } from "./api/types";
 
 const client = new BleClient();
 
@@ -8,14 +8,20 @@ const btnConnect = document.getElementById("btn-connect") as HTMLButtonElement;
 const deviceStatus = document.getElementById("device-status")!;
 const timeSection = document.getElementById("time-section")!;
 const todoSection = document.getElementById("todo-section")!;
+const alarmSection = document.getElementById("alarm-section")!;
 const watchfaceSection = document.getElementById("watchface-section")!;
 const browserTime = document.getElementById("browser-time")!;
 const btnSetTime = document.getElementById("btn-set-time") as HTMLButtonElement;
 const todoForm = document.getElementById("todo-form") as HTMLFormElement;
 const todoInput = document.getElementById("todo-input") as HTMLInputElement;
+const todoDaily = document.getElementById("todo-daily") as HTMLInputElement;
 const todoActive = document.getElementById("todo-active")!;
 const todoCompleted = document.getElementById("todo-completed")!;
 const btnRefreshTodos = document.getElementById("btn-refresh-todos") as HTMLButtonElement;
+const alarmForm = document.getElementById("alarm-form") as HTMLFormElement;
+const alarmTime = document.getElementById("alarm-time") as HTMLInputElement;
+const alarmLabel = document.getElementById("alarm-label") as HTMLInputElement;
+const alarmList = document.getElementById("alarm-list")!;
 const toast = document.getElementById("toast")!;
 const faceCanvas = document.getElementById("face-preview") as HTMLCanvasElement;
 const facePreset = document.getElementById("face-preset") as HTMLSelectElement;
@@ -32,6 +38,7 @@ const uploadProgress = document.getElementById("upload-progress")!;
 const uploadProgressBar = document.getElementById("upload-progress-bar")!;
 
 let todos: TodoItem[] = [];
+let alarms: AlarmItem[] = [];
 const faceCtx = faceCanvas.getContext("2d")!;
 let faceImage: HTMLImageElement | null = null;
 
@@ -64,8 +71,15 @@ function normalizeTodo(item: TodoItem): TodoItem {
   return {
     ...item,
     priority: (item.priority ?? 0) as TodoItem["priority"],
+    repeat: (item.repeat ?? 0) as TodoItem["repeat"],
     sortOrder: item.sortOrder ?? 0,
   };
+}
+
+function formatAlarmTime(hour: number, minute: number): string {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function sortTodos(items: TodoItem[]): TodoItem[] {
@@ -152,6 +166,23 @@ function renderTodos() {
         setTodoPriority(item.id, Number(priority.value) as TodoItem["priority"])
       );
       li.appendChild(priority);
+
+      const repeat = document.createElement("select");
+      repeat.className = "todo-repeat";
+      for (const [value, label] of [
+        ["0", "Once"],
+        ["1", "Daily"],
+      ] as const) {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = label;
+        repeat.appendChild(opt);
+      }
+      repeat.value = String(item.repeat ?? 0);
+      repeat.addEventListener("change", () =>
+        setTodoRepeat(item.id, Number(repeat.value) as TodoItem["repeat"])
+      );
+      li.appendChild(repeat);
     }
 
     const cb = document.createElement("input");
@@ -161,7 +192,7 @@ function renderTodos() {
 
     const span = document.createElement("span");
     span.className = "todo-text";
-    span.textContent = item.text;
+    span.textContent = item.repeat === 1 ? `↻ ${item.text}` : item.text;
 
     li.append(cb, span);
     (item.done ? todoCompleted : todoActive).appendChild(li);
@@ -181,6 +212,65 @@ async function loadTodosFromWatch(): Promise<boolean> {
 
 async function syncTodosToWatch() {
   await client.writeTodos({ items: todos });
+}
+
+function renderAlarms() {
+  alarmList.innerHTML = "";
+  const sorted = [...alarms].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+
+  for (const item of sorted) {
+    const li = document.createElement("li");
+    li.className = "alarm-item";
+
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.checked = item.enabled;
+    toggle.title = "Enabled";
+    toggle.addEventListener("change", () => toggleAlarm(item.id, toggle.checked));
+
+    const time = document.createElement("span");
+    time.className = "alarm-time";
+    time.textContent = formatAlarmTime(item.hour, item.minute);
+
+    const label = document.createElement("span");
+    label.className = "alarm-label";
+    label.textContent = item.label || "Alarm";
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "ghost alarm-delete";
+    del.textContent = "Delete";
+    del.addEventListener("click", () => deleteAlarm(item.id));
+
+    li.append(toggle, time, label, del);
+    alarmList.appendChild(li);
+  }
+}
+
+function setAlarmsFromPayload(payload: AlarmPayload) {
+  alarms = payload.items.filter((i) => !i.deleted);
+  renderAlarms();
+}
+
+async function syncAlarmsToWatch() {
+  await client.writeAlarms({ items: alarms });
+}
+
+async function loadAlarmsFromWatch() {
+  const payload = await withRetry(() => client.readAlarms());
+  setAlarmsFromPayload(payload);
+}
+
+async function toggleAlarm(id: string, enabled: boolean) {
+  alarms = alarms.map((a) => (a.id === id ? { ...a, enabled } : a));
+  renderAlarms();
+  await syncAlarmsToWatch();
+}
+
+async function deleteAlarm(id: string) {
+  alarms = alarms.filter((a) => a.id !== id);
+  renderAlarms();
+  await syncAlarmsToWatch();
 }
 
 function readWatchfaceFromForm(): WatchfaceConfig {
@@ -278,6 +368,12 @@ async function setTodoPriority(id: string, priority: TodoItem["priority"]) {
   await syncTodosToWatch();
 }
 
+async function setTodoRepeat(id: string, repeat: TodoItem["repeat"]) {
+  todos = todos.map((t) => (t.id === id ? { ...t, repeat } : t));
+  renderTodos();
+  await syncTodosToWatch();
+}
+
 async function moveTodo(id: string, direction: -1 | 1) {
   const active = sortTodos(todos).filter((t) => !t.done);
   const idx = active.findIndex((t) => t.id === id);
@@ -299,6 +395,7 @@ async function moveTodo(id: string, direction: -1 | 1) {
 function setConnectedUi(connected: boolean) {
   timeSection.hidden = !connected;
   todoSection.hidden = !connected;
+  alarmSection.hidden = !connected;
   watchfaceSection.hidden = !connected;
   btnConnect.disabled = connected;
   btnConnect.textContent = connected ? "Connected" : "Connect via Bluetooth";
@@ -325,6 +422,8 @@ btnConnect.addEventListener("click", async () => {
     });
 
     client.onTodoSync(setTodosFromPayload);
+
+    client.onAlarmSync(setAlarmsFromPayload);
 
     client.onWatchfaceSync(applyWatchfaceToForm);
 
@@ -359,6 +458,12 @@ btnConnect.addEventListener("click", async () => {
     } catch (err) {
       showToast(`Could not read watch face: ${errMessage(err)}`);
     }
+
+    try {
+      await loadAlarmsFromWatch();
+    } catch (err) {
+      showToast(`Could not read alarms: ${errMessage(err)}`);
+    }
   } catch (err) {
     setConnectedUi(false);
     showToast(err instanceof Error ? err.message : "Connection failed");
@@ -376,13 +481,40 @@ todoForm.addEventListener("submit", async (e) => {
     text,
     done: false,
     priority: 0,
+    repeat: todoDaily.checked ? 1 : 0,
     sortOrder: nextSortOrder(todos),
     createdAt: Date.now(),
     completedAt: 0,
   });
   todoInput.value = "";
+  todoDaily.checked = false;
   renderTodos();
   await syncTodosToWatch();
+});
+
+alarmForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!client.connected) return;
+
+  const [hh, mm] = alarmTime.value.split(":").map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return;
+  if (alarms.length >= 8) {
+    showToast("Maximum 8 alarms");
+    return;
+  }
+
+  const id = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  alarms.push({
+    id,
+    label: alarmLabel.value.trim() || "Alarm",
+    hour: hh,
+    minute: mm,
+    enabled: true,
+  });
+  alarmLabel.value = "";
+  renderAlarms();
+  await syncAlarmsToWatch();
+  showToast("Alarm synced to watch", 2000);
 });
 
 btnRefreshTodos.addEventListener("click", async () => {

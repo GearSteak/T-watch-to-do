@@ -7,6 +7,7 @@ import {
   CHR_COMPLETED_LOG,
   CHR_WATCHFACE_META,
   CHR_WATCHFACE_IMAGE,
+  CHR_ALARM_SYNC,
   WF_IMG_OP_BEGIN,
   WF_IMG_OP_DATA,
   WF_IMG_OP_COMMIT,
@@ -20,6 +21,7 @@ import {
   TODO_PAGE_SIZE,
   type DeviceInfo,
   type TodoPayload,
+  type AlarmPayload,
   type BatteryAlert,
   type WatchfaceConfig,
 } from "../api/types";
@@ -52,8 +54,10 @@ export class BleClient {
   private chrCompletedLog: BluetoothRemoteGATTCharacteristic | null = null;
   private chrWatchfaceMeta: BluetoothRemoteGATTCharacteristic | null = null;
   private chrWatchfaceImage: BluetoothRemoteGATTCharacteristic | null = null;
+  private chrAlarmSync: BluetoothRemoteGATTCharacteristic | null = null;
   private disconnectCb: (() => void) | null = null;
   private todoCb: ((payload: TodoPayload) => void) | null = null;
+  private alarmCb: ((payload: AlarmPayload) => void) | null = null;
   private opChain: Promise<unknown> = Promise.resolve();
 
   get connected(): boolean {
@@ -105,9 +109,11 @@ export class BleClient {
     this.chrCompletedLog = await service.getCharacteristic(CHR_COMPLETED_LOG);
     this.chrWatchfaceMeta = await service.getCharacteristic(CHR_WATCHFACE_META);
     this.chrWatchfaceImage = await service.getCharacteristic(CHR_WATCHFACE_IMAGE);
+    this.chrAlarmSync = await service.getCharacteristic(CHR_ALARM_SYNC);
 
     await this.chrDeviceInfo.startNotifications();
     await this.chrTodoSync.startNotifications();
+    await this.chrAlarmSync.startNotifications();
     await this.chrBatteryAlert.startNotifications();
     await this.chrCompletedLog.startNotifications();
     await this.chrWatchfaceMeta.startNotifications();
@@ -126,11 +132,23 @@ export class BleClient {
       const target = e.target as BluetoothRemoteGATTCharacteristic;
       const v = target.value;
       if (!v || v.byteLength === 0) return;
-      // The watch sends a 1-byte "changed" ping; pull the full list via the
-      // paged download protocol in response.
       if (v.getUint8(0) === TODO_PING_CHANGED) {
         this.readTodos()
           .then((payload) => this.todoCb?.(payload))
+          .catch(() => undefined);
+      }
+    });
+  }
+
+  onAlarmSync(cb: (payload: AlarmPayload) => void): void {
+    this.alarmCb = cb;
+    this.chrAlarmSync?.addEventListener("characteristicvaluechanged", (e) => {
+      const target = e.target as BluetoothRemoteGATTCharacteristic;
+      const v = target.value;
+      if (!v || v.byteLength === 0) return;
+      if (v.getUint8(0) === TODO_PING_CHANGED) {
+        this.readAlarms()
+          .then((payload) => this.alarmCb?.(payload))
           .catch(() => undefined);
       }
     });
@@ -202,6 +220,67 @@ export class BleClient {
 
   private async writeTodosInner(payload: TodoPayload): Promise<void> {
     const chr = this.chrTodoSync!;
+    const data = new TextEncoder().encode(JSON.stringify(payload));
+
+    const begin = new Uint8Array(5);
+    begin[0] = TODO_OP_UPLOAD_BEGIN;
+    new DataView(begin.buffer).setUint32(1, data.length, true);
+    await chr.writeValueWithResponse(begin.buffer as ArrayBuffer);
+
+    const CHUNK = 180;
+    for (let offset = 0; offset < data.length; offset += CHUNK) {
+      const slice = data.subarray(offset, Math.min(offset + CHUNK, data.length));
+      const packet = new Uint8Array(5 + slice.length);
+      packet[0] = TODO_OP_UPLOAD_DATA;
+      new DataView(packet.buffer).setUint32(1, offset, true);
+      packet.set(slice, 5);
+      await chr.writeValueWithResponse(packet.buffer as ArrayBuffer);
+    }
+
+    await chr.writeValueWithResponse(u8(TODO_OP_UPLOAD_COMMIT));
+  }
+
+  async readAlarms(): Promise<AlarmPayload> {
+    return this.run(() => this.readAlarmsInner());
+  }
+
+  private async readAlarmsInner(): Promise<AlarmPayload> {
+    const chr = this.chrAlarmSync!;
+    await chr.writeValueWithResponse(u8(TODO_OP_DL_PREPARE));
+
+    const header = await chr.readValue();
+    const total = header.byteLength >= 4 ? header.getUint32(0, true) : 0;
+    if (total === 0) return { items: [] };
+
+    const buf = new Uint8Array(total);
+    let received = 0;
+    while (received < total) {
+      const req = new Uint8Array(5);
+      req[0] = TODO_OP_DL_PAGE;
+      new DataView(req.buffer).setUint32(1, received, true);
+      await chr.writeValueWithResponse(req.buffer as ArrayBuffer);
+
+      const page = await chr.readValue();
+      if (page.byteLength === 0) break;
+      const pageBytes = new Uint8Array(page.buffer, page.byteOffset, page.byteLength);
+      const take = Math.min(pageBytes.length, total - received);
+      buf.set(pageBytes.subarray(0, take), received);
+      received += take;
+      if (pageBytes.length < TODO_PAGE_SIZE && received < total) {
+        break;
+      }
+    }
+
+    const text = new TextDecoder().decode(buf.subarray(0, received));
+    return JSON.parse(text) as AlarmPayload;
+  }
+
+  async writeAlarms(payload: AlarmPayload): Promise<void> {
+    return this.run(() => this.writeAlarmsInner(payload));
+  }
+
+  private async writeAlarmsInner(payload: AlarmPayload): Promise<void> {
+    const chr = this.chrAlarmSync!;
     const data = new TextEncoder().encode(JSON.stringify(payload));
 
     const begin = new Uint8Array(5);

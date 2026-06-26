@@ -279,3 +279,66 @@ button:hover {
   width: 18px;
   height: 18px;
 }
+
+.todo-daily-row {
+  margin: 0.5rem 0;
+}
+
+.todo-repeat {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f0f1a;
+  color: #e8e8f0;
+}
+
+.alarm-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.alarm-form input[type="time"],
+.alarm-form input[type="text"] {
+  flex: 1 1 120px;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #0f0f1a;
+  color: #e8e8f0;
+}
+
+.alarm-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.alarm-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.alarm-item:last-child {
+  border-bottom: none;
+}
+
+.alarm-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 4.5rem;
+  font-weight: 600;
+}
+
+.alarm-label {
+  flex: 1;
+}
+
+.alarm-delete {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.6rem;
+}

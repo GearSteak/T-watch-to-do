@@ -8,6 +8,7 @@ namespace AppUi {
     void refreshWatchface();
     void refreshStatusBar();
     void showBatteryAlert(int level, int percent);
+    void showAlarmAlert(const char *label);
     void vibrateShort();
     bool isAlertVisible();
 }

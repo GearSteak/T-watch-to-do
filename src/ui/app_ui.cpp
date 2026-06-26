@@ -22,6 +22,7 @@ static lv_obj_t *watchfaceTime = nullptr;
 static lv_obj_t *watchfaceDate = nullptr;
 static lv_obj_t *watchfaceBattery = nullptr;
 static lv_obj_t *alertOverlay = nullptr;
+static lv_obj_t *alarmOverlay = nullptr;
 static lv_timer_t *clockTimer = nullptr;
 static std::vector<String> todoIds;
 
@@ -338,10 +339,14 @@ void AppUi::refreshTodos() {
         // The watch is for viewing and checking off. Priority (text color) and
         // ordering are managed from the web app, so no controls clutter the row.
         lv_obj_t *text = lv_label_create(row);
-        lv_label_set_text(text, item.text.c_str());
+        String displayText = item.text;
+        if (item.repeat == TODO_REPEAT_DAILY) {
+            displayText = String(LV_SYMBOL_REFRESH) + " " + item.text;
+        }
+        lv_label_set_text(text, displayText.c_str());
         lv_label_set_long_mode(text, LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_color(text, lv_color_hex(priorityColor(item.priority)), 0);
-        lv_obj_set_width(text, 175);
+        lv_obj_set_width(text, 168);
         lv_obj_align(text, LV_ALIGN_LEFT_MID, 4, 0);
 
         lv_obj_t *cb = lv_checkbox_create(row);
@@ -402,12 +407,57 @@ void AppUi::showBatteryAlert(int level, int percent) {
     }, LV_EVENT_CLICKED, nullptr);
 }
 
+void AppUi::showAlarmAlert(const char *label) {
+    displaySleep.wake();
+
+    if (alarmOverlay) {
+        lv_obj_del(alarmOverlay);
+        alarmOverlay = nullptr;
+    }
+
+    vibrateShort();
+    vibrateShort();
+    vibrateShort();
+
+    alarmOverlay = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(alarmOverlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(alarmOverlay, lv_color_hex(0x001133), 0);
+    lv_obj_set_style_bg_opa(alarmOverlay, LV_OPA_90, 0);
+    lv_obj_clear_flag(alarmOverlay, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *title = lv_label_create(alarmOverlay);
+    lv_label_set_text(title, "Alarm");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0x66AAFF), 0);
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, -36);
+
+    lv_obj_t *name = lv_label_create(alarmOverlay);
+    lv_label_set_text(name, label);
+    lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_width(name, LV_PCT(90));
+    lv_obj_align(name, LV_ALIGN_CENTER, 0, 8);
+
+    lv_obj_t *hint = lv_label_create(alarmOverlay);
+    lv_label_set_text(hint, "Tap to dismiss");
+    lv_obj_set_style_text_color(hint, lv_color_hex(0xAAAAAA), 0);
+    lv_obj_align(hint, LV_ALIGN_CENTER, 0, 44);
+
+    lv_obj_add_event_cb(alarmOverlay, [](lv_event_t *e) {
+        lv_obj_t *obj = (lv_obj_t *)lv_event_get_target(e);
+        if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+            lv_obj_del(obj);
+            alarmOverlay = nullptr;
+        }
+    }, LV_EVENT_CLICKED, nullptr);
+}
+
 void AppUi::vibrateShort() {
     vibrateShort();
 }
 
 bool AppUi::isAlertVisible() {
-    return alertOverlay != nullptr;
+    return alertOverlay != nullptr || alarmOverlay != nullptr;
 }
 
 void AppUi::init() {

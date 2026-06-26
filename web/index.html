@@ -33,13 +33,28 @@
         </div>
         <form id="todo-form">
           <input id="todo-input" type="text" placeholder="Add a task..." maxlength="120" required />
+          <label class="checkbox-row todo-daily-row">
+            <input type="checkbox" id="todo-daily" />
+            Repeat daily
+          </label>
           <button type="submit" class="primary">Add</button>
         </form>
         <h3>Active</h3>
-        <p class="hint">Higher priority items appear first. Use arrows to reorder within the same priority.</p>
+        <p class="hint">Higher priority items appear first. Daily tasks reset each morning after you check them off.</p>
         <ul id="todo-active" class="todo-list"></ul>
         <h3>Completed</h3>
         <ul id="todo-completed" class="todo-list completed"></ul>
+      </section>
+
+      <section class="card" id="alarm-section" hidden>
+        <h2>Alarms</h2>
+        <form id="alarm-form" class="alarm-form">
+          <input id="alarm-time" type="time" required />
+          <input id="alarm-label" type="text" placeholder="Label (optional)" maxlength="40" />
+          <button type="submit" class="primary">Add alarm</button>
+        </form>
+        <p class="hint">Alarms vibrate on the watch. Tap the screen to dismiss when they ring.</p>
+        <ul id="alarm-list" class="alarm-list"></ul>
       </section>
 
       <section class="card" id="watchface-section" hidden>

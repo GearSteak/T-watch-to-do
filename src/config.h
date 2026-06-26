@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "0.1.11"
+#define FIRMWARE_VERSION "0.1.12"
 #define DEVICE_NAME "TWatch-Companion"
 
 #define SVC_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -11,10 +11,12 @@
 #define CHR_COMPLETED_LOG "6e400014-b5a3-f393-e0a9-e50e24dcca9e"
 #define CHR_WATCHFACE_META "6e400015-b5a3-f393-e0a9-e50e24dcca9e"
 #define CHR_WATCHFACE_IMAGE "6e400016-b5a3-f393-e0a9-e50e24dcca9e"
+#define CHR_ALARM_SYNC "6e400017-b5a3-f393-e0a9-e50e24dcca9e"
 
 #define TODO_FILE "/todos.json"
 #define WATCHFACE_FILE "/watchface.json"
 #define WATCHFACE_IMAGE_FILE "/watchface.bin"
+#define ALARM_FILE "/alarms.json"
 
 #define WATCHFACE_IMAGE_W 240
 #define WATCHFACE_IMAGE_H 240
@@ -41,6 +43,13 @@
 #define TODO_UPLOAD_MAX 16384
 #define MAX_TODOS 50
 #define MAX_TODO_TEXT 120
+
+#define TODO_REPEAT_NONE 0
+#define TODO_REPEAT_DAILY 1
+
+#define MAX_ALARMS 8
+#define ALARM_LABEL_MAX 40
+#define ALARM_UPLOAD_MAX 4096
 
 #define BATTERY_POLL_MS_NORMAL 60000
 #define BATTERY_POLL_MS_LOW 30000

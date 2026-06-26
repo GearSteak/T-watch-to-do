@@ -8,11 +8,14 @@
 #include "services/battery_monitor.h"
 #include "services/time_service.h"
 #include "services/display_sleep.h"
+#include "services/alarm_service.h"
+#include "storage/alarm_store.h"
 #include "ui/app_ui.h"
 
 static uint32_t lastBatteryNotifyMs = 0;
 static volatile bool todosDirty = false;
 static volatile bool watchfaceDirty = false;
+static volatile bool alarmsDirty = false;
 
 static void onTodoChanged() {
     todosDirty = true;
@@ -22,10 +25,18 @@ static void onWatchfaceChanged() {
     watchfaceDirty = true;
 }
 
+static void onAlarmChanged() {
+    alarmsDirty = true;
+}
+
 static void onBatteryAlert(int level, int percent) {
     AppUi::showBatteryAlert(level, percent);
     bleService.notifyBatteryAlert(level, percent);
     bleService.notifyDeviceInfo();
+}
+
+static void onAlarmFire(const String &label) {
+    AppUi::showAlarmAlert(label.c_str());
 }
 
 void setup() {
@@ -48,12 +59,21 @@ void setup() {
     }
     watchfaceStore.setOnChange(onWatchfaceChanged);
 
+    if (!alarmStore.begin()) {
+        Serial.println("[Main] Alarm store init failed");
+    }
+    alarmStore.setOnChange(onAlarmChanged);
+
     batteryMonitor.begin();
     batteryMonitor.setAlertCallback(onBatteryAlert);
 
     bleService.setTodoChangeCallback(onTodoChanged);
     bleService.setWatchfaceChangeCallback(onWatchfaceChanged);
+    bleService.setAlarmChangeCallback(onAlarmChanged);
     bleService.begin();
+
+    alarmService.begin();
+    alarmService.setOnFire(onAlarmFire);
 
     AppUi::init();
 
@@ -81,6 +101,9 @@ void loop() {
 
     displaySleep.loopTick(AppUi::isAlertVisible());
 
+    todoStore.processRepeats();
+    alarmService.loopTick();
+
     if (todosDirty) {
         todosDirty = false;
         AppUi::refreshTodos();
@@ -97,6 +120,13 @@ void loop() {
         bleService.updateStoredValues();
         if (bleService.isConnected()) {
             bleService.notifyWatchfaceMeta();
+        }
+    }
+
+    if (alarmsDirty) {
+        alarmsDirty = false;
+        if (bleService.isConnected()) {
+            bleService.notifyAlarmSync();
         }
     }
 

@@ -6,6 +6,7 @@ export const CHR_BATTERY_ALERT = "6e400013-b5a3-f393-e0a9-e50e24dcca9e";
 export const CHR_COMPLETED_LOG = "6e400014-b5a3-f393-e0a9-e50e24dcca9e";
 export const CHR_WATCHFACE_META = "6e400015-b5a3-f393-e0a9-e50e24dcca9e";
 export const CHR_WATCHFACE_IMAGE = "6e400016-b5a3-f393-e0a9-e50e24dcca9e";
+export const CHR_ALARM_SYNC = "6e400017-b5a3-f393-e0a9-e50e24dcca9e";
 
 export interface DeviceInfo {
   fw: string;
@@ -16,11 +17,14 @@ export interface DeviceInfo {
 
 export type TodoPriority = 0 | 1 | 2 | 3;
 
+export type TodoRepeat = 0 | 1;
+
 export interface TodoItem {
   id: string;
   text: string;
   done: boolean;
   priority: TodoPriority;
+  repeat: TodoRepeat;
   sortOrder: number;
   createdAt: number;
   completedAt: number;
@@ -29,6 +33,20 @@ export interface TodoItem {
 
 export interface TodoPayload {
   items: TodoItem[];
+}
+
+export interface AlarmItem {
+  id: string;
+  label: string;
+  hour: number;
+  minute: number;
+  enabled: boolean;
+  lastFiredYmd?: number;
+  deleted?: boolean;
+}
+
+export interface AlarmPayload {
+  items: AlarmItem[];
 }
 
 export interface BatteryAlert {
