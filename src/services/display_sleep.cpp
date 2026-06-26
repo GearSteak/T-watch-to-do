@@ -8,34 +8,38 @@ DisplaySleep displaySleep;
 
 void DisplaySleep::begin(uint8_t activeBrightness) {
     activeBrightness_ = activeBrightness;
-    lastActivityMs_ = millis();
     asleep_ = false;
 }
 
-void DisplaySleep::onTouch() {
-    if (asleep_) {
-        wake();
-        return;
-    }
-    lastActivityMs_ = millis();
-}
-
 void DisplaySleep::loopTick(bool blockSleep) {
-    if (asleep_ || blockSleep) {
+    // Use LVGL's own input-inactivity timer instead of polling the touch
+    // controller ourselves. Reading the touch panel from two places (here and
+    // LVGL's input driver) contends on the shared I2C bus and could wedge the
+    // UI, which looked like random freezes.
+    const uint32_t idleMs = lv_display_get_inactive_time(NULL);
+
+    if (asleep_) {
+        // Any touch resets LVGL's inactivity timer, so a low value means the
+        // user just interacted and we should turn the screen back on.
+        if (idleMs < DISPLAY_SLEEP_TIMEOUT_MS) {
+            wake();
+        }
         return;
     }
-    if (millis() - lastActivityMs_ >= DISPLAY_SLEEP_TIMEOUT_MS) {
+
+    if (blockSleep) {
+        return;
+    }
+    if (idleMs >= DISPLAY_SLEEP_TIMEOUT_MS) {
         sleep();
     }
 }
 
 void DisplaySleep::wake() {
     if (!asleep_) {
-        lastActivityMs_ = millis();
         return;
     }
     asleep_ = false;
-    lastActivityMs_ = millis();
     instance.setBrightness(activeBrightness_);
     lv_obj_invalidate(lv_scr_act());
 }

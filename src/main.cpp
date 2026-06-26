@@ -10,7 +10,6 @@
 #include "services/display_sleep.h"
 #include "services/alarm_service.h"
 #include "storage/alarm_store.h"
-#include "services/notification.h"
 #include "ui/app_ui.h"
 
 static uint32_t lastBatteryNotifyMs = 0;
@@ -76,7 +75,6 @@ void setup() {
     alarmService.begin();
     alarmService.setOnFire(onAlarmFire);
 
-    Notify::begin();
     AppUi::init();
 
     struct tm hwTime;
@@ -97,12 +95,6 @@ void loop() {
 
     if (bleService.consumeTodoAddedNotify()) {
         AppUi::notifyTodoAdded();
-    }
-
-    int16_t touchX = 0;
-    int16_t touchY = 0;
-    if (instance.getPoint(&touchX, &touchY, 1)) {
-        displaySleep.onTouch();
     }
 
     displaySleep.loopTick(AppUi::isAlertVisible());
@@ -145,8 +137,9 @@ void loop() {
         }
     }
 
-    if (!displaySleep.isAsleep()) {
-        lv_task_handler();
-    }
+    // Always service LVGL, even with the backlight off, so it keeps reading
+    // the touch panel. That lets a tap reset LVGL's inactivity timer and wake
+    // the screen via displaySleep.loopTick() above.
+    lv_task_handler();
     delay(5);
 }

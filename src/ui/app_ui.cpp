@@ -6,8 +6,6 @@
 #include "services/time_service.h"
 #include "services/device_reset.h"
 #include "services/display_sleep.h"
-#include "services/notification.h"
-
 #include <LilyGoLib.h>
 #include <FFat.h>
 #include <esp_heap_caps.h>
@@ -461,9 +459,10 @@ void AppUi::showAlarmAlert(const char *label) {
 
 void AppUi::notifyTodoAdded() {
     displaySleep.wake();
+    // The T-Watch S3 has no speaker, so notify with a double haptic buzz only.
     vibrateShort();
+    delay(120);
     vibrateShort();
-    Notify::todoAdded();
 }
 
 void AppUi::vibrateShort() {
