@@ -458,7 +458,11 @@ void BleService::loopTick() {
         pendingTodoWrite_ = false;
         const String json(pendingTodoJson_.c_str());
         pendingTodoJson_.clear();
-        todoStore.mergeFromJson(json);
+        size_t added = 0;
+        todoStore.mergeFromJson(json, &added);
+        if (added > 0) {
+            pendingTodoAddedNotify_ = true;
+        }
     }
 
     if (pendingWatchfaceWrite_) {
@@ -556,4 +560,12 @@ void BleService::notifyAlarmSync() {
     }
     const uint8_t ping = TODO_PING_CHANGED;
     chrAlarmSync->notify(&ping, 1);
+}
+
+bool BleService::consumeTodoAddedNotify() {
+    if (!pendingTodoAddedNotify_) {
+        return false;
+    }
+    pendingTodoAddedNotify_ = false;
+    return true;
 }

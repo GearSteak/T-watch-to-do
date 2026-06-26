@@ -6,6 +6,7 @@
 #include "services/time_service.h"
 #include "services/device_reset.h"
 #include "services/display_sleep.h"
+#include "services/notification.h"
 
 #include <LilyGoLib.h>
 #include <FFat.h>
@@ -224,7 +225,7 @@ static void resetConfirmEvent(lv_event_t *e) {
         return;
     }
     vibrateShort();
-    DeviceReset::perform();
+    DeviceReset::restart();
 }
 
 static void resetCancelEvent(lv_event_t *e) {
@@ -237,21 +238,21 @@ static void resetCancelEvent(lv_event_t *e) {
     }
 }
 
-static void showResetConfirm() {
+static void showRestartConfirm() {
     lv_obj_t *mbox = lv_msgbox_create(nullptr);
-    lv_msgbox_add_title(mbox, "Reset watch?");
-    lv_msgbox_add_text(mbox, "Erases all todos and settings, then reboots.");
-    lv_obj_t *btnReset = lv_msgbox_add_footer_button(mbox, "Reset");
+    lv_msgbox_add_title(mbox, "Restart watch?");
+    lv_msgbox_add_text(mbox, "Turns the watch off and on.\nYour todos are kept.");
+    lv_obj_t *btnRestart = lv_msgbox_add_footer_button(mbox, "Restart");
     lv_obj_t *btnCancel = lv_msgbox_add_footer_button(mbox, "Cancel");
-    lv_obj_set_style_text_color(btnReset, lv_color_hex(0xFF6666), 0);
-    lv_obj_add_event_cb(btnReset, resetConfirmEvent, LV_EVENT_CLICKED, nullptr);
+    lv_obj_set_style_text_color(btnRestart, lv_color_hex(0x66AAFF), 0);
+    lv_obj_add_event_cb(btnRestart, resetConfirmEvent, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(btnCancel, resetCancelEvent, LV_EVENT_CLICKED, mbox);
     lv_obj_center(mbox);
 }
 
 static void resetButtonEvent(lv_event_t *e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        showResetConfirm();
+        showRestartConfirm();
     }
 }
 
@@ -304,15 +305,15 @@ static void buildSettingsTab(lv_obj_t *parent) {
 
     lv_obj_t *btnReset = lv_btn_create(cont);
     lv_obj_set_width(btnReset, LV_PCT(90));
-    lv_obj_set_style_bg_color(btnReset, lv_color_hex(0x662222), 0);
+    lv_obj_set_style_bg_color(btnReset, lv_color_hex(0x223366), 0);
     lv_obj_t *lblReset = lv_label_create(btnReset);
-    lv_label_set_text(lblReset, "Reset watch");
+    lv_label_set_text(lblReset, "Restart watch");
     lv_obj_set_style_text_color(lblReset, lv_color_hex(0xFFFFFF), 0);
     lv_obj_center(lblReset);
     lv_obj_add_event_cb(btnReset, resetButtonEvent, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *hint = lv_label_create(cont);
-    lv_label_set_text(hint, "Clears todos and reboots");
+    lv_label_set_text(hint, "Power off and on — keeps your data");
     lv_obj_set_style_text_color(hint, lv_color_hex(0xAAAAAA), 0);
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(hint, LV_PCT(90));
@@ -332,6 +333,12 @@ void AppUi::refreshTodos() {
         lv_obj_t *row = lv_list_add_btn(todoList, nullptr, "");
         lv_obj_set_height(row, 36);
         lv_obj_set_style_pad_all(row, 4, 0);
+        // The default LVGL theme gives list buttons a light background, which
+        // hides the white (no-priority) text. Force a dark row so every
+        // priority colour — including plain white — is readable.
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x1a1a2e), 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x2a2a44), LV_STATE_PRESSED);
         // List buttons use an automatic flex layout that pushes manually placed
         // children off-screen. Disable it so the checkbox stays pinned right.
         lv_obj_set_layout(row, LV_LAYOUT_NONE);
@@ -340,7 +347,7 @@ void AppUi::refreshTodos() {
         // ordering are managed from the web app, so no controls clutter the row.
         lv_obj_t *text = lv_label_create(row);
         String displayText = item.text;
-        if (item.repeat == TODO_REPEAT_DAILY) {
+        if (item.repeat != TODO_REPEAT_NONE) {
             displayText = String(LV_SYMBOL_REFRESH) + " " + item.text;
         }
         lv_label_set_text(text, displayText.c_str());
@@ -450,6 +457,13 @@ void AppUi::showAlarmAlert(const char *label) {
             alarmOverlay = nullptr;
         }
     }, LV_EVENT_CLICKED, nullptr);
+}
+
+void AppUi::notifyTodoAdded() {
+    displaySleep.wake();
+    vibrateShort();
+    vibrateShort();
+    Notify::todoAdded();
 }
 
 void AppUi::vibrateShort() {

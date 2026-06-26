@@ -15,6 +15,30 @@ static uint32_t currentYmd() {
     return (uint32_t)((t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday);
 }
 
+static uint32_t ymdFromMs(uint64_t ms) {
+    const time_t sec = (time_t)(ms / 1000ULL);
+    struct tm t;
+    localtime_r(&sec, &t);
+    return (uint32_t)((t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday);
+}
+
+static time_t ymdToTime(uint32_t ymd) {
+    struct tm t = {};
+    t.tm_year = (int)(ymd / 10000) - 1900;
+    t.tm_mon = (int)((ymd / 100) % 100) - 1;
+    t.tm_mday = (int)(ymd % 100);
+    t.tm_hour = 12;
+    return mktime(&t);
+}
+
+static int daysBetweenYmd(uint32_t fromYmd, uint32_t toYmd) {
+    if (toYmd <= fromYmd) {
+        return 0;
+    }
+    const double diff = difftime(ymdToTime(toYmd), ymdToTime(fromYmd));
+    return (int)(diff / 86400.0);
+}
+
 static int nextSortOrder(const std::vector<TodoItem> &items) {
     int maxOrder = -1;
     for (const TodoItem &item : items) {
@@ -85,6 +109,8 @@ bool TodoStore::load() {
         item.done = obj["done"] | false;
         item.priority = obj["priority"] | 0;
         item.repeat = obj["repeat"] | 0;
+        item.repeatWeekday = obj["repeatWeekday"] | 0;
+        item.repeatIntervalDays = obj["repeatIntervalDays"] | 0;
         item.sortOrder = obj["sortOrder"] | 0;
         item.createdAt = obj["createdAt"] | 0ULL;
         item.completedAt = obj["completedAt"] | 0ULL;
@@ -113,6 +139,8 @@ bool TodoStore::save() {
         obj["done"] = item.done;
         obj["priority"] = item.priority;
         obj["repeat"] = item.repeat;
+        obj["repeatWeekday"] = item.repeatWeekday;
+        obj["repeatIntervalDays"] = item.repeatIntervalDays;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;
@@ -241,14 +269,27 @@ bool TodoStore::remove(const String &id) {
     return false;
 }
 
-bool TodoStore::mergeFromJson(const String &json) {
+bool TodoStore::mergeFromJson(const String &json, size_t *addedCount) {
     JsonDocument doc;
     if (deserializeJson(doc, json)) {
         return false;
     }
 
+    if (addedCount) {
+        *addedCount = 0;
+    }
+
+    const bool fullSync = doc["fullSync"] | false;
+    std::vector<String> incomingIds;
+    incomingIds.reserve(16);
+
     for (JsonObject obj : doc["items"].as<JsonArray>()) {
         const String id = obj["id"].as<String>();
+        if (id.isEmpty()) {
+            continue;
+        }
+        incomingIds.push_back(id);
+
         const bool deleted = obj["deleted"] | false;
         if (deleted) {
             remove(id);
@@ -261,6 +302,8 @@ bool TodoStore::mergeFromJson(const String &json) {
             existing->done = obj["done"] | false;
             existing->priority = obj["priority"] | existing->priority;
             existing->repeat = obj["repeat"] | existing->repeat;
+            existing->repeatWeekday = obj["repeatWeekday"] | existing->repeatWeekday;
+            existing->repeatIntervalDays = obj["repeatIntervalDays"] | existing->repeatIntervalDays;
             existing->sortOrder = obj["sortOrder"] | existing->sortOrder;
             existing->completedAt = obj["completedAt"] | 0ULL;
         } else if (items_.size() < MAX_TODOS) {
@@ -270,10 +313,32 @@ bool TodoStore::mergeFromJson(const String &json) {
             item.done = obj["done"] | false;
             item.priority = obj["priority"] | 0;
             item.repeat = obj["repeat"] | 0;
+            item.repeatWeekday = obj["repeatWeekday"] | 0;
+            item.repeatIntervalDays = obj["repeatIntervalDays"] | 0;
             item.sortOrder = obj["sortOrder"] | nextSortOrder(items_);
             item.createdAt = obj["createdAt"] | (uint64_t)time(nullptr) * 1000ULL;
             item.completedAt = obj["completedAt"] | 0ULL;
             items_.push_back(item);
+            if (addedCount) {
+                (*addedCount)++;
+            }
+        }
+    }
+
+    if (fullSync && !incomingIds.empty()) {
+        for (size_t i = 0; i < items_.size();) {
+            bool keep = false;
+            for (const String &incomingId : incomingIds) {
+                if (items_[i].id == incomingId) {
+                    keep = true;
+                    break;
+                }
+            }
+            if (!keep) {
+                items_.erase(items_.begin() + (int)i);
+            } else {
+                ++i;
+            }
         }
     }
 
@@ -292,7 +357,12 @@ bool TodoStore::clearAll() {
 }
 
 void TodoStore::processRepeats() {
+    const time_t now = time(nullptr);
+    struct tm todayTm;
+    localtime_r(&now, &todayTm);
     const uint32_t today = currentYmd();
+    const int wday = todayTm.tm_wday;
+
     if (lastDailyResetYmd_ == 0) {
         lastDailyResetYmd_ = today;
         save();
@@ -304,12 +374,39 @@ void TodoStore::processRepeats() {
 
     bool changed = false;
     for (TodoItem &item : items_) {
-        if (item.repeat == TODO_REPEAT_DAILY && item.done) {
+        if (!item.done || item.repeat == TODO_REPEAT_NONE) {
+            continue;
+        }
+
+        bool shouldReset = false;
+        switch (item.repeat) {
+        case TODO_REPEAT_DAILY:
+            shouldReset = true;
+            break;
+        case TODO_REPEAT_WEEKLY:
+            if (wday == item.repeatWeekday) {
+                shouldReset = true;
+            }
+            break;
+        case TODO_REPEAT_INTERVAL:
+            if (item.repeatIntervalDays >= 2 && item.completedAt > 0) {
+                const uint32_t completedYmd = ymdFromMs(item.completedAt);
+                if (daysBetweenYmd(completedYmd, today) >= item.repeatIntervalDays) {
+                    shouldReset = true;
+                }
+            }
+            break;
+        default:
+            break;
+        }
+
+        if (shouldReset) {
             item.done = false;
             item.completedAt = 0;
             changed = true;
         }
     }
+
     lastDailyResetYmd_ = today;
     if (changed) {
         notifyChange();
@@ -329,6 +426,8 @@ String TodoStore::toJson() const {
         obj["done"] = item.done;
         obj["priority"] = item.priority;
         obj["repeat"] = item.repeat;
+        obj["repeatWeekday"] = item.repeatWeekday;
+        obj["repeatIntervalDays"] = item.repeatIntervalDays;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;

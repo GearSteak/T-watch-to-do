@@ -9,6 +9,7 @@ namespace AppUi {
     void refreshStatusBar();
     void showBatteryAlert(int level, int percent);
     void showAlarmAlert(const char *label);
+    void notifyTodoAdded();
     void vibrateShort();
     bool isAlertVisible();
 }

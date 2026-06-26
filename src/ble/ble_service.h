@@ -59,6 +59,7 @@ public:
 
     bool isConnected() const { return connected_; }
     void setConnected(bool connected) { connected_ = connected; }
+    bool consumeTodoAddedNotify();
 
 private:
     bool connected_ = false;
@@ -68,6 +69,7 @@ private:
     volatile bool pendingTodoWrite_ = false;
     volatile bool pendingWatchfaceWrite_ = false;
     volatile bool pendingAlarmWrite_ = false;
+    volatile bool pendingTodoAddedNotify_ = false;
     std::string pendingTodoJson_;
     std::string pendingWatchfaceJson_;
     std::string pendingAlarmJson_;

@@ -280,6 +280,29 @@ button:hover {
   height: 18px;
 }
 
+.todo-repeat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.todo-repeat-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.todo-repeat-row select,
+.todo-repeat-row input[type="number"] {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f0f1a;
+  color: #e8e8f0;
+}
+
 .todo-daily-row {
   margin: 0.5rem 0;
 }

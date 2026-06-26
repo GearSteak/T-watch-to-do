@@ -17,7 +17,7 @@ export interface DeviceInfo {
 
 export type TodoPriority = 0 | 1 | 2 | 3;
 
-export type TodoRepeat = 0 | 1;
+export type TodoRepeat = 0 | 1 | 2 | 3;
 
 export interface TodoItem {
   id: string;
@@ -25,6 +25,8 @@ export interface TodoItem {
   done: boolean;
   priority: TodoPriority;
   repeat: TodoRepeat;
+  repeatWeekday?: number;
+  repeatIntervalDays?: number;
   sortOrder: number;
   createdAt: number;
   completedAt: number;
@@ -33,6 +35,7 @@ export interface TodoItem {
 
 export interface TodoPayload {
   items: TodoItem[];
+  fullSync?: boolean;
 }
 
 export interface AlarmItem {

@@ -9,7 +9,9 @@ struct TodoItem {
     String text;
     bool done = false;
     uint8_t priority = 0; // 0=none, 1=low, 2=medium, 3=high
-    uint8_t repeat = 0; // 0=none, 1=daily
+    uint8_t repeat = 0; // TODO_REPEAT_*
+    uint8_t repeatWeekday = 0; // 0=Sun .. 6=Sat (weekly)
+    uint16_t repeatIntervalDays = 0; // every N days (interval)
     int sortOrder = 0;
     uint64_t createdAt = 0;
     uint64_t completedAt = 0;
@@ -30,7 +32,7 @@ public:
     bool setPriority(const String &id, uint8_t priority);
     bool cyclePriority(const String &id);
     bool move(const String &id, int direction);
-    bool mergeFromJson(const String &json);
+    bool mergeFromJson(const String &json, size_t *addedCount = nullptr);
     bool clearAll();
     void processRepeats();
     String toJson() const;

@@ -1,5 +1,6 @@
 #pragma once
 
 namespace DeviceReset {
-    void perform();
+    void restart();
+    void factoryReset();
 }

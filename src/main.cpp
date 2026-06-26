@@ -10,6 +10,7 @@
 #include "services/display_sleep.h"
 #include "services/alarm_service.h"
 #include "storage/alarm_store.h"
+#include "services/notification.h"
 #include "ui/app_ui.h"
 
 static uint32_t lastBatteryNotifyMs = 0;
@@ -75,6 +76,7 @@ void setup() {
     alarmService.begin();
     alarmService.setOnFire(onAlarmFire);
 
+    Notify::begin();
     AppUi::init();
 
     struct tm hwTime;
@@ -92,6 +94,10 @@ void loop() {
     batteryMonitor.update();
 
     bleService.loopTick();
+
+    if (bleService.consumeTodoAddedNotify()) {
+        AppUi::notifyTodoAdded();
+    }
 
     int16_t touchX = 0;
     int16_t touchY = 0;

@@ -14,7 +14,11 @@ const browserTime = document.getElementById("browser-time")!;
 const btnSetTime = document.getElementById("btn-set-time") as HTMLButtonElement;
 const todoForm = document.getElementById("todo-form") as HTMLFormElement;
 const todoInput = document.getElementById("todo-input") as HTMLInputElement;
-const todoDaily = document.getElementById("todo-daily") as HTMLInputElement;
+const todoRepeat = document.getElementById("todo-repeat") as HTMLSelectElement;
+const todoRepeatWeekday = document.getElementById("todo-repeat-weekday") as HTMLSelectElement;
+const todoRepeatDays = document.getElementById("todo-repeat-days") as HTMLInputElement;
+const repeatWeeklyWrap = document.getElementById("repeat-weekly-wrap")!;
+const repeatIntervalWrap = document.getElementById("repeat-interval-wrap")!;
 const todoActive = document.getElementById("todo-active")!;
 const todoCompleted = document.getElementById("todo-completed")!;
 const btnRefreshTodos = document.getElementById("btn-refresh-todos") as HTMLButtonElement;
@@ -66,15 +70,47 @@ function errMessage(err: unknown): string {
 }
 
 const PRIORITY_LABELS = ["None", "Low", "Medium", "High"] as const;
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 function normalizeTodo(item: TodoItem): TodoItem {
   return {
     ...item,
     priority: (item.priority ?? 0) as TodoItem["priority"],
     repeat: (item.repeat ?? 0) as TodoItem["repeat"],
+    repeatWeekday: item.repeatWeekday ?? 0,
+    repeatIntervalDays: item.repeatIntervalDays ?? 0,
     sortOrder: item.sortOrder ?? 0,
   };
 }
+
+function repeatPrefix(item: TodoItem): string {
+  if (!item.repeat) return "";
+  if (item.repeat === 1) return "↻ ";
+  if (item.repeat === 2) return `↻${WEEKDAY_LABELS[item.repeatWeekday ?? 0]} `;
+  if (item.repeat === 3) return `↻${item.repeatIntervalDays || 3}d `;
+  return "↻ ";
+}
+
+function updateRepeatFormVisibility() {
+  const mode = Number(todoRepeat.value);
+  repeatWeeklyWrap.hidden = mode !== 2;
+  repeatIntervalWrap.hidden = mode !== 3;
+}
+
+function readRepeatFromForm(): Pick<TodoItem, "repeat" | "repeatWeekday" | "repeatIntervalDays"> {
+  const repeat = Number(todoRepeat.value) as TodoItem["repeat"];
+  if (repeat === 2) {
+    return { repeat, repeatWeekday: Number(todoRepeatWeekday.value), repeatIntervalDays: 0 };
+  }
+  if (repeat === 3) {
+    const days = Math.max(2, Math.min(365, Number(todoRepeatDays.value) || 3));
+    return { repeat, repeatWeekday: 0, repeatIntervalDays: days };
+  }
+  return { repeat, repeatWeekday: 0, repeatIntervalDays: 0 };
+}
+
+todoRepeat.addEventListener("change", updateRepeatFormVisibility);
+updateRepeatFormVisibility();
 
 function formatAlarmTime(hour: number, minute: number): string {
   const d = new Date();
@@ -172,6 +208,8 @@ function renderTodos() {
       for (const [value, label] of [
         ["0", "Once"],
         ["1", "Daily"],
+        ["2", "Weekly"],
+        ["3", "Every N days"],
       ] as const) {
         const opt = document.createElement("option");
         opt.value = value;
@@ -179,9 +217,16 @@ function renderTodos() {
         repeat.appendChild(opt);
       }
       repeat.value = String(item.repeat ?? 0);
-      repeat.addEventListener("change", () =>
-        setTodoRepeat(item.id, Number(repeat.value) as TodoItem["repeat"])
-      );
+      repeat.addEventListener("change", () => {
+        const mode = Number(repeat.value) as TodoItem["repeat"];
+        if (mode === 2) {
+          setTodoRepeat(item.id, mode, { repeatWeekday: item.repeatWeekday ?? 1 });
+        } else if (mode === 3) {
+          setTodoRepeat(item.id, mode, { repeatIntervalDays: item.repeatIntervalDays || 3 });
+        } else {
+          setTodoRepeat(item.id, mode);
+        }
+      });
       li.appendChild(repeat);
     }
 
@@ -192,7 +237,7 @@ function renderTodos() {
 
     const span = document.createElement("span");
     span.className = "todo-text";
-    span.textContent = item.repeat === 1 ? `↻ ${item.text}` : item.text;
+    span.textContent = `${repeatPrefix(item)}${item.text}`;
 
     li.append(cb, span);
     (item.done ? todoCompleted : todoActive).appendChild(li);
@@ -210,8 +255,23 @@ async function loadTodosFromWatch(): Promise<boolean> {
   return todos.length > 0;
 }
 
+function mergeTodoLists(remote: TodoItem[], local: TodoItem[]): TodoItem[] {
+  const byId = new Map<string, TodoItem>();
+  for (const item of remote) {
+    byId.set(item.id, normalizeTodo(item));
+  }
+  for (const item of local) {
+    const prev = byId.get(item.id);
+    byId.set(item.id, normalizeTodo({ ...prev, ...item }));
+  }
+  return sortTodos([...byId.values()]);
+}
+
 async function syncTodosToWatch() {
-  await client.writeTodos({ items: todos });
+  const remote = await withRetry(() => client.readTodos());
+  todos = mergeTodoLists(remote.items, todos);
+  renderTodos();
+  await client.writeTodos({ items: todos, fullSync: true });
 }
 
 function renderAlarms() {
@@ -368,8 +428,26 @@ async function setTodoPriority(id: string, priority: TodoItem["priority"]) {
   await syncTodosToWatch();
 }
 
-async function setTodoRepeat(id: string, repeat: TodoItem["repeat"]) {
-  todos = todos.map((t) => (t.id === id ? { ...t, repeat } : t));
+async function setTodoRepeat(
+  id: string,
+  repeat: TodoItem["repeat"],
+  extra?: { repeatWeekday?: number; repeatIntervalDays?: number },
+) {
+  todos = todos.map((t) => {
+    if (t.id !== id) return t;
+    const next: TodoItem = { ...t, repeat };
+    if (repeat === 2) {
+      next.repeatWeekday = extra?.repeatWeekday ?? t.repeatWeekday ?? 1;
+      next.repeatIntervalDays = 0;
+    } else if (repeat === 3) {
+      next.repeatIntervalDays = Math.max(2, extra?.repeatIntervalDays ?? t.repeatIntervalDays ?? 3);
+      next.repeatWeekday = 0;
+    } else {
+      next.repeatWeekday = 0;
+      next.repeatIntervalDays = 0;
+    }
+    return next;
+  });
   renderTodos();
   await syncTodosToWatch();
 }
@@ -476,18 +554,20 @@ todoForm.addEventListener("submit", async (e) => {
   if (!text || !client.connected) return;
 
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  const repeatFields = readRepeatFromForm();
   todos.push({
     id,
     text,
     done: false,
     priority: 0,
-    repeat: todoDaily.checked ? 1 : 0,
+    ...repeatFields,
     sortOrder: nextSortOrder(todos),
     createdAt: Date.now(),
     completedAt: 0,
   });
   todoInput.value = "";
-  todoDaily.checked = false;
+  todoRepeat.value = "0";
+  updateRepeatFormVisibility();
   renderTodos();
   await syncTodosToWatch();
 });
