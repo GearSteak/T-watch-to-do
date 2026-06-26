@@ -18,6 +18,9 @@ public:
 
     void loopTick();
 
+    void scheduleConnectNotify();
+    void scheduleDeviceInfoNotify();
+
     // Refreshes the stored characteristic values (todos, completed log,
     // watchface, device info) so GATT reads always return current data.
     void updateStoredValues();
@@ -70,6 +73,8 @@ private:
     volatile bool pendingWatchfaceWrite_ = false;
     volatile bool pendingAlarmWrite_ = false;
     volatile bool pendingTodoAddedNotify_ = false;
+    volatile bool pendingConnectNotify_ = false;
+    volatile bool pendingDeviceInfoNotify_ = false;
     std::string pendingTodoJson_;
     std::string pendingWatchfaceJson_;
     std::string pendingAlarmJson_;

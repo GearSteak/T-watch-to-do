@@ -35,10 +35,9 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
         bleService.setConnected(true);
         Serial.println("[BLE] Client connected");
-        bleService.notifyDeviceInfo();
-        bleService.notifyTodoSync();
-        bleService.notifyWatchfaceMeta();
-        bleService.notifyAlarmSync();
+        // Never call notify() from the BLE host task — it triggers NVS writes
+        // for CCCD persistence and can panic (LoadStoreAlignment). Defer to loop().
+        bleService.scheduleConnectNotify();
     }
 
     void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
@@ -64,7 +63,7 @@ class TimeSyncCallbacks : public NimBLECharacteristicCallbacks {
 
         TimeService::setFromUnixMs(unixMs, tzOffset);
         Serial.printf("[BLE] Time set to %lld (tz %+d min)\n", (long long)unixMs, tzOffset);
-        bleService.notifyDeviceInfo();
+        bleService.scheduleDeviceInfoNotify();
     }
 };
 
@@ -453,6 +452,14 @@ void BleService::imageClear() {
     pendingImageClear_ = true;
 }
 
+void BleService::scheduleConnectNotify() {
+    pendingConnectNotify_ = true;
+}
+
+void BleService::scheduleDeviceInfoNotify() {
+    pendingDeviceInfoNotify_ = true;
+}
+
 void BleService::loopTick() {
     if (pendingTodoWrite_) {
         pendingTodoWrite_ = false;
@@ -508,6 +515,21 @@ void BleService::loopTick() {
         }
         watchfaceStore.setHasImage(false);
         Serial.println("[BLE] Image cleared");
+    }
+
+    if (pendingConnectNotify_) {
+        pendingConnectNotify_ = false;
+        if (connected_) {
+            notifyDeviceInfo();
+            notifyTodoSync();
+            notifyWatchfaceMeta();
+            notifyAlarmSync();
+        }
+    }
+
+    if (pendingDeviceInfoNotify_) {
+        pendingDeviceInfoNotify_ = false;
+        notifyDeviceInfo();
     }
 }
 

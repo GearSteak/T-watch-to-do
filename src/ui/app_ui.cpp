@@ -459,9 +459,7 @@ void AppUi::showAlarmAlert(const char *label) {
 
 void AppUi::notifyTodoAdded() {
     displaySleep.wake();
-    // The T-Watch S3 has no speaker, so notify with a double haptic buzz only.
     vibrateShort();
-    delay(120);
     vibrateShort();
 }
 

@@ -32,8 +32,11 @@ bool AlarmStore::load() {
     }
 
     File f = FFat.open(ALARM_FILE, "r");
-    if (!f) {
-        return false;
+    if (!f || f.size() == 0) {
+        if (f) {
+            f.close();
+        }
+        return save();
     }
 
     JsonDocument doc;
