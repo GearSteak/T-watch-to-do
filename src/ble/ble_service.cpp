@@ -217,6 +217,9 @@ class WatchfaceImageCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 bool BleService::begin() {
+    if (!snapshotMux_) {
+        snapshotMux_ = xSemaphoreCreateMutex();
+    }
     NimBLEDevice::init(DEVICE_NAME);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
     // Larger MTU so todo/watchface JSON fits in a single packet for most lists
@@ -272,6 +275,8 @@ bool BleService::begin() {
     advertising->setName(DEVICE_NAME);
     advertising->start();
 
+    rebuildDownloadSnapshots();
+
     Serial.println("[BLE] Advertising as " DEVICE_NAME);
     return true;
 }
@@ -284,6 +289,22 @@ void BleService::updateStoredValues() {
     }
     if (chrDeviceInfo) {
         chrDeviceInfo->setValue(buildDeviceInfoJson().c_str());
+    }
+    rebuildDownloadSnapshots();
+}
+
+void BleService::rebuildDownloadSnapshots() {
+    // Walks the store vectors (toJson) — must run on the main loop only. Build
+    // into locals first so the brief mutex hold is just two string swaps.
+    std::string todoSnap(todoStore.toJson().c_str());
+    std::string alarmSnap(alarmStore.toJson().c_str());
+    if (snapshotMux_ && xSemaphoreTake(snapshotMux_, portMAX_DELAY) == pdTRUE) {
+        todoDownloadBuf_.swap(todoSnap);
+        alarmDownloadBuf_.swap(alarmSnap);
+        xSemaphoreGive(snapshotMux_);
+    } else {
+        todoDownloadBuf_.swap(todoSnap);
+        alarmDownloadBuf_.swap(alarmSnap);
     }
 }
 
@@ -303,8 +324,13 @@ void BleService::queueAlarmWrite(const std::string &json) {
 }
 
 void BleService::todoDownloadPrepare() {
-    todoDownloadBuf_ = std::string(todoStore.toJson().c_str());
-    const uint32_t total = (uint32_t)todoDownloadBuf_.size();
+    // Runs on the BLE host task. Only reads the snapshot the main loop built —
+    // never calls toJson() here (that would race the main loop on the vector).
+    uint32_t total = 0;
+    if (snapshotMux_ && xSemaphoreTake(snapshotMux_, portMAX_DELAY) == pdTRUE) {
+        total = (uint32_t)todoDownloadBuf_.size();
+        xSemaphoreGive(snapshotMux_);
+    }
     uint8_t header[4];
     memcpy(header, &total, 4);
     if (chrTodoSync) {
@@ -316,15 +342,18 @@ void BleService::todoDownloadPage(uint32_t offset) {
     if (!chrTodoSync) {
         return;
     }
-    if (offset >= todoDownloadBuf_.size()) {
-        chrTodoSync->setValue((const uint8_t *)"", 0);
-        return;
+    if (snapshotMux_ && xSemaphoreTake(snapshotMux_, portMAX_DELAY) == pdTRUE) {
+        if (offset >= todoDownloadBuf_.size()) {
+            chrTodoSync->setValue((const uint8_t *)"", 0);
+        } else {
+            size_t len = todoDownloadBuf_.size() - offset;
+            if (len > TODO_PAGE_SIZE) {
+                len = TODO_PAGE_SIZE;
+            }
+            chrTodoSync->setValue((const uint8_t *)todoDownloadBuf_.data() + offset, len);
+        }
+        xSemaphoreGive(snapshotMux_);
     }
-    size_t len = todoDownloadBuf_.size() - offset;
-    if (len > TODO_PAGE_SIZE) {
-        len = TODO_PAGE_SIZE;
-    }
-    chrTodoSync->setValue((const uint8_t *)todoDownloadBuf_.data() + offset, len);
 }
 
 void BleService::todoUploadBegin(uint32_t totalSize) {
@@ -361,8 +390,11 @@ void BleService::todoUploadCommit() {
 }
 
 void BleService::alarmDownloadPrepare() {
-    alarmDownloadBuf_ = std::string(alarmStore.toJson().c_str());
-    const uint32_t total = (uint32_t)alarmDownloadBuf_.size();
+    uint32_t total = 0;
+    if (snapshotMux_ && xSemaphoreTake(snapshotMux_, portMAX_DELAY) == pdTRUE) {
+        total = (uint32_t)alarmDownloadBuf_.size();
+        xSemaphoreGive(snapshotMux_);
+    }
     uint8_t header[4];
     memcpy(header, &total, 4);
     if (chrAlarmSync) {
@@ -374,15 +406,18 @@ void BleService::alarmDownloadPage(uint32_t offset) {
     if (!chrAlarmSync) {
         return;
     }
-    if (offset >= alarmDownloadBuf_.size()) {
-        chrAlarmSync->setValue((const uint8_t *)"", 0);
-        return;
+    if (snapshotMux_ && xSemaphoreTake(snapshotMux_, portMAX_DELAY) == pdTRUE) {
+        if (offset >= alarmDownloadBuf_.size()) {
+            chrAlarmSync->setValue((const uint8_t *)"", 0);
+        } else {
+            size_t len = alarmDownloadBuf_.size() - offset;
+            if (len > TODO_PAGE_SIZE) {
+                len = TODO_PAGE_SIZE;
+            }
+            chrAlarmSync->setValue((const uint8_t *)alarmDownloadBuf_.data() + offset, len);
+        }
+        xSemaphoreGive(snapshotMux_);
     }
-    size_t len = alarmDownloadBuf_.size() - offset;
-    if (len > TODO_PAGE_SIZE) {
-        len = TODO_PAGE_SIZE;
-    }
-    chrAlarmSync->setValue((const uint8_t *)alarmDownloadBuf_.data() + offset, len);
 }
 
 void BleService::alarmUploadBegin(uint32_t totalSize) {

@@ -49,6 +49,10 @@ let alarms: AlarmItem[] = [];
 // IDs the user deleted this session. Kept so the read-merge-write sync and the
 // watch's change-ping re-download don't resurrect a just-deleted task.
 const deletedTodoIds = new Set<string>();
+// Number of todo writes we have in flight. While > 0 we ignore the watch's
+// change-ping (it's just an echo of our own write) so it can't clobber a local
+// edit — e.g. reverting a priority change before it finishes syncing.
+let todoWritesInFlight = 0;
 const faceCtx = faceCanvas.getContext("2d")!;
 let faceImage: HTMLImageElement | null = null;
 
@@ -413,6 +417,9 @@ function renderTodos() {
 }
 
 function setTodosFromPayload(payload: TodoPayload) {
+  // Ignore the watch's change-ping while our own write is in flight — it's an
+  // echo and would overwrite the edit we're still syncing.
+  if (todoWritesInFlight > 0) return;
   todos = payload.items
     .filter((i) => !i.deleted && !deletedTodoIds.has(i.id))
     .map(normalizeTodo);
@@ -438,26 +445,38 @@ function mergeTodoLists(remote: TodoItem[], local: TodoItem[]): TodoItem[] {
 }
 
 async function syncTodosToWatch() {
-  const remote = await withRetry(() => client.readTodos());
-  // Merge the watch's list with ours so a stale client can't wipe items it
-  // never saw, then drop anything the user explicitly deleted this session.
-  // Without this filter the merge re-adds the just-deleted item from the watch.
-  todos = mergeTodoLists(remote.items, todos).filter((t) => !deletedTodoIds.has(t.id));
-  renderTodos();
-  // Send tombstones for deleted ids so the watch removes them too. fullSync
-  // alone won't delete them because we keep filtering them out of `todos`.
-  const tombstones: TodoItem[] = [...deletedTodoIds].map((id) => ({
-    id,
-    text: "",
-    done: false,
-    priority: 0,
-    repeat: 0,
-    sortOrder: 0,
-    createdAt: 0,
-    completedAt: 0,
-    deleted: true,
-  }));
-  await client.writeTodos({ items: [...todos, ...tombstones], fullSync: true });
+  // Snapshot the local list (the user's intent) BEFORE any await. An incoming
+  // change-ping could replace `todos` while we're reading the watch; merging
+  // from this snapshot ensures the edit we're syncing is never lost.
+  const localSnapshot = todos;
+  todoWritesInFlight += 1;
+  try {
+    const remote = await withRetry(() => client.readTodos());
+    // Merge the watch's list with ours so a stale client can't wipe items it
+    // never saw, then drop anything the user explicitly deleted this session.
+    // Without this filter the merge re-adds the just-deleted item.
+    const merged = mergeTodoLists(remote.items, localSnapshot).filter(
+      (t) => !deletedTodoIds.has(t.id),
+    );
+    todos = merged;
+    renderTodos();
+    // Send tombstones for deleted ids so the watch removes them too. fullSync
+    // alone won't delete them because we keep filtering them out of `todos`.
+    const tombstones: TodoItem[] = [...deletedTodoIds].map((id) => ({
+      id,
+      text: "",
+      done: false,
+      priority: 0,
+      repeat: 0,
+      sortOrder: 0,
+      createdAt: 0,
+      completedAt: 0,
+      deleted: true,
+    }));
+    await client.writeTodos({ items: [...merged, ...tombstones], fullSync: true });
+  } finally {
+    todoWritesInFlight -= 1;
+  }
 }
 
 function renderAlarms() {

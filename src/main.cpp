@@ -128,6 +128,9 @@ void loop() {
 
     if (alarmsDirty) {
         alarmsDirty = false;
+        // Rebuild the BLE download snapshot on the main loop before notifying,
+        // so the host task never serializes the alarm list concurrently.
+        bleService.updateStoredValues();
         if (bleService.isConnected()) {
             bleService.notifyAlarmSync();
         }

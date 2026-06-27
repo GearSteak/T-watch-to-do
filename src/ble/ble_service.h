@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <functional>
 #include <string>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 class BleService {
 public:
@@ -23,6 +25,8 @@ public:
 
     // Refreshes the stored characteristic values (todos, completed log,
     // watchface, device info) so GATT reads always return current data.
+    // Also rebuilds the todo/alarm download snapshots. MUST be called only
+    // from the main loop, never the BLE host task.
     void updateStoredValues();
 
     void queueTodoWrite(const std::string &json);
@@ -85,6 +89,10 @@ private:
     volatile bool pendingImageCommit_ = false;
     volatile bool pendingImageClear_ = false;
 
+    // Download snapshots are (re)built on the main loop and read by the BLE
+    // host task during paged downloads. The mutex prevents the host task from
+    // reading these strings while the main loop is replacing them, and ensures
+    // toJson() (which walks the store vectors) only ever runs on the main loop.
     std::string todoDownloadBuf_;
     uint8_t *todoUpBuf_ = nullptr;
     uint32_t todoUpExpected_ = 0;
@@ -92,6 +100,9 @@ private:
     std::string alarmDownloadBuf_;
     uint8_t *alarmUpBuf_ = nullptr;
     uint32_t alarmUpExpected_ = 0;
+
+    SemaphoreHandle_t snapshotMux_ = nullptr;
+    void rebuildDownloadSnapshots();
 };
 
 extern BleService bleService;
