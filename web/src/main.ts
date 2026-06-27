@@ -397,7 +397,14 @@ function renderTodos() {
     span.className = "todo-text";
     span.textContent = `${repeatPrefix(item)}${item.text}`;
 
-    li.append(cb, span);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "ghost todo-delete";
+    del.textContent = "Delete";
+    del.title = "Remove task";
+    del.addEventListener("click", () => deleteTodo(item.id));
+
+    li.append(cb, span, del);
     (item.done ? todoCompleted : todoActive).appendChild(li);
   }
 }
@@ -576,6 +583,12 @@ async function toggleTodo(id: string) {
       ? { ...t, done: !t.done, completedAt: !t.done ? Date.now() : 0 }
       : t
   );
+  renderTodos();
+  await syncTodosToWatch();
+}
+
+async function deleteTodo(id: string) {
+  todos = todos.filter((t) => t.id !== id);
   renderTodos();
   await syncTodosToWatch();
 }
