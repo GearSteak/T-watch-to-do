@@ -412,7 +412,11 @@ void AppUi::showBatteryAlert(int level, int percent) {
     }, LV_EVENT_CLICKED, nullptr);
 }
 
-void AppUi::showAlarmAlert(const char *label) {
+void AppUi::showReminderAlert(const char *text) {
+    showAlarmAlert(text, "Reminder");
+}
+
+void AppUi::showAlarmAlert(const char *label, const char *titleText) {
     displaySleep.wake();
 
     if (alarmOverlay) {
@@ -431,7 +435,7 @@ void AppUi::showAlarmAlert(const char *label) {
     lv_obj_clear_flag(alarmOverlay, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *title = lv_label_create(alarmOverlay);
-    lv_label_set_text(title, "Alarm");
+    lv_label_set_text(title, titleText);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0x66AAFF), 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, -36);

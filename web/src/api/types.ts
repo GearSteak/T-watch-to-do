@@ -28,6 +28,7 @@ export interface TodoItem {
   repeatWeekday?: number;
   repeatIntervalDays?: number;
   repeatMonthDay?: number;
+  remindMinute?: number; // minute of day 0..1439; 65535 = no reminder
   sortOrder: number;
   createdAt: number;
   completedAt: number;

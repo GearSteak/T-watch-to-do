@@ -13,6 +13,8 @@ struct TodoItem {
     uint8_t repeatWeekday = 0; // 0=Sun .. 6=Sat (weekly)
     uint16_t repeatIntervalDays = 0; // every N days (interval)
     uint8_t repeatMonthDay = 0; // 1..31 (monthly; 31 -> last day in short months)
+    uint16_t remindMinute = 0xFFFF; // minute of day 0..1439 to remind; 0xFFFF = none
+    uint32_t lastRemindedYmd = 0; // last day a reminder fired (avoid repeats same day)
     int sortOrder = 0;
     uint64_t createdAt = 0;
     uint64_t completedAt = 0;
@@ -36,6 +38,9 @@ public:
     bool mergeFromJson(const String &json, size_t *addedCount = nullptr);
     bool clearAll();
     void processRepeats();
+    // Returns true and fills outText if an active task's reminder time matches
+    // the current minute and hasn't fired yet today.
+    bool dueReminder(String &outText);
     String toJson() const;
     String completedLogJson(int limit = 20) const;
 

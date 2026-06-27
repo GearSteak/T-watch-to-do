@@ -134,6 +134,8 @@ bool TodoStore::load() {
         item.repeatWeekday = obj["repeatWeekday"] | 0;
         item.repeatIntervalDays = obj["repeatIntervalDays"] | 0;
         item.repeatMonthDay = obj["repeatMonthDay"] | 0;
+        item.remindMinute = obj["remindMinute"] | 0xFFFF;
+        item.lastRemindedYmd = obj["lastRemindedYmd"] | 0U;
         item.sortOrder = obj["sortOrder"] | 0;
         item.createdAt = obj["createdAt"] | 0ULL;
         item.completedAt = obj["completedAt"] | 0ULL;
@@ -165,6 +167,8 @@ bool TodoStore::save() {
         obj["repeatWeekday"] = item.repeatWeekday;
         obj["repeatIntervalDays"] = item.repeatIntervalDays;
         obj["repeatMonthDay"] = item.repeatMonthDay;
+        obj["remindMinute"] = item.remindMinute;
+        obj["lastRemindedYmd"] = item.lastRemindedYmd;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;
@@ -329,6 +333,13 @@ bool TodoStore::mergeFromJson(const String &json, size_t *addedCount) {
             existing->repeatWeekday = obj["repeatWeekday"] | existing->repeatWeekday;
             existing->repeatIntervalDays = obj["repeatIntervalDays"] | existing->repeatIntervalDays;
             existing->repeatMonthDay = obj["repeatMonthDay"] | existing->repeatMonthDay;
+            if (obj["remindMinute"].is<uint16_t>()) {
+                const uint16_t newRemind = obj["remindMinute"].as<uint16_t>();
+                if (newRemind != existing->remindMinute) {
+                    existing->remindMinute = newRemind;
+                    existing->lastRemindedYmd = 0; // allow the new time to fire today
+                }
+            }
             existing->sortOrder = obj["sortOrder"] | existing->sortOrder;
             existing->completedAt = obj["completedAt"] | 0ULL;
         } else if (items_.size() < MAX_TODOS) {
@@ -341,6 +352,7 @@ bool TodoStore::mergeFromJson(const String &json, size_t *addedCount) {
             item.repeatWeekday = obj["repeatWeekday"] | 0;
             item.repeatIntervalDays = obj["repeatIntervalDays"] | 0;
             item.repeatMonthDay = obj["repeatMonthDay"] | 0;
+            item.remindMinute = obj["remindMinute"] | 0xFFFF;
             item.sortOrder = obj["sortOrder"] | nextSortOrder(items_);
             item.createdAt = obj["createdAt"] | (uint64_t)time(nullptr) * 1000ULL;
             item.completedAt = obj["completedAt"] | 0ULL;
@@ -448,6 +460,28 @@ void TodoStore::processRepeats() {
     }
 }
 
+bool TodoStore::dueReminder(String &outText) {
+    const time_t now = time(nullptr);
+    struct tm t;
+    localtime_r(&now, &t);
+    const uint16_t nowMinute = (uint16_t)(t.tm_hour * 60 + t.tm_min);
+    const uint32_t today = currentYmd();
+
+    for (TodoItem &item : items_) {
+        if (item.done || item.remindMinute > 1439) {
+            continue;
+        }
+        if (item.remindMinute != nowMinute || item.lastRemindedYmd == today) {
+            continue;
+        }
+        item.lastRemindedYmd = today;
+        save();
+        outText = item.text;
+        return true;
+    }
+    return false;
+}
+
 String TodoStore::toJson() const {
     JsonDocument doc;
     doc["lastDailyResetYmd"] = lastDailyResetYmd_;
@@ -462,6 +496,8 @@ String TodoStore::toJson() const {
         obj["repeatWeekday"] = item.repeatWeekday;
         obj["repeatIntervalDays"] = item.repeatIntervalDays;
         obj["repeatMonthDay"] = item.repeatMonthDay;
+        obj["remindMinute"] = item.remindMinute;
+        obj["lastRemindedYmd"] = item.lastRemindedYmd;
         obj["sortOrder"] = item.sortOrder;
         obj["createdAt"] = item.createdAt;
         obj["completedAt"] = item.completedAt;

@@ -1,6 +1,6 @@
 #pragma once
 
-#define FIRMWARE_VERSION "0.1.17"
+#define FIRMWARE_VERSION "0.1.18"
 #define DEVICE_NAME "TWatch-Companion"
 
 #define SVC_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"

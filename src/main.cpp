@@ -102,6 +102,11 @@ void loop() {
     todoStore.processRepeats();
     alarmService.loopTick();
 
+    String reminderText;
+    if (todoStore.dueReminder(reminderText)) {
+        AppUi::showReminderAlert(reminderText.c_str());
+    }
+
     if (todosDirty) {
         todosDirty = false;
         AppUi::refreshTodos();

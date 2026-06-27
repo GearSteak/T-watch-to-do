@@ -18,6 +18,7 @@ const todoRepeat = document.getElementById("todo-repeat") as HTMLSelectElement;
 const todoRepeatWeekday = document.getElementById("todo-repeat-weekday") as HTMLSelectElement;
 const todoRepeatDays = document.getElementById("todo-repeat-days") as HTMLInputElement;
 const todoRepeatMonthday = document.getElementById("todo-repeat-monthday") as HTMLSelectElement;
+const todoRemind = document.getElementById("todo-remind") as HTMLInputElement;
 const repeatWeeklyWrap = document.getElementById("repeat-weekly-wrap")!;
 const repeatIntervalWrap = document.getElementById("repeat-interval-wrap")!;
 const repeatMonthlyWrap = document.getElementById("repeat-monthly-wrap")!;
@@ -73,6 +74,30 @@ function errMessage(err: unknown): string {
 
 const PRIORITY_LABELS = ["None", "Low", "Medium", "High"] as const;
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const NO_REMIND = 65535;
+
+function minuteToHHMM(min: number | undefined): string {
+  if (min === undefined || min >= NO_REMIND || min < 0) return "";
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function hhmmToMinute(value: string): number {
+  if (!value) return NO_REMIND;
+  const [h, m] = value.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return NO_REMIND;
+  return h * 60 + m;
+}
+
+function formatRemind(min: number | undefined): string {
+  const hhmm = minuteToHHMM(min);
+  if (!hhmm) return "";
+  const d = new Date();
+  const [h, m] = hhmm.split(":").map(Number);
+  d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 const REPEAT_OPTIONS: { value: TodoItem["repeat"]; label: string }[] = [
   { value: 0, label: "Once" },
   { value: 1, label: "Daily" },
@@ -175,17 +200,20 @@ function normalizeTodo(item: TodoItem): TodoItem {
     repeatWeekday: item.repeatWeekday ?? 0,
     repeatIntervalDays: item.repeatIntervalDays ?? 0,
     repeatMonthDay: item.repeatMonthDay ?? 0,
+    remindMinute: item.remindMinute ?? NO_REMIND,
     sortOrder: item.sortOrder ?? 0,
   };
 }
 
 function repeatPrefix(item: TodoItem): string {
-  if (!item.repeat) return "";
-  if (item.repeat === 1) return "↻ daily ";
-  if (item.repeat === 2) return `↻ ${WEEKDAY_LABELS[item.repeatWeekday ?? 0]} `;
-  if (item.repeat === 3) return `↻ every ${item.repeatIntervalDays || 3}d `;
-  if (item.repeat === 4) return `↻ day ${item.repeatMonthDay || 1} `;
-  return "↻ ";
+  let prefix = "";
+  if (item.repeat === 1) prefix = "↻ daily ";
+  else if (item.repeat === 2) prefix = `↻ ${WEEKDAY_LABELS[item.repeatWeekday ?? 0]} `;
+  else if (item.repeat === 3) prefix = `↻ every ${item.repeatIntervalDays || 3}d `;
+  else if (item.repeat === 4) prefix = `↻ day ${item.repeatMonthDay || 1} `;
+  const remind = formatRemind(item.remindMinute);
+  if (remind) prefix += `⏰ ${remind} `;
+  return prefix;
 }
 
 function updateRepeatFormVisibility() {
@@ -347,7 +375,16 @@ function renderTodos() {
         syncRepeat({ repeatMonthDay: Number(monthDaySelect.value) }),
       );
 
-      repeatControls.append(repeatSelect, weekdaySelect, intervalInput, monthDaySelect);
+      const remindInput = document.createElement("input");
+      remindInput.type = "time";
+      remindInput.className = "todo-repeat-sub todo-remind";
+      remindInput.title = "Reminder time";
+      remindInput.value = minuteToHHMM(item.remindMinute);
+      remindInput.addEventListener("change", () =>
+        setTodoReminder(item.id, hhmmToMinute(remindInput.value)),
+      );
+
+      repeatControls.append(repeatSelect, weekdaySelect, intervalInput, monthDaySelect, remindInput);
       li.appendChild(repeatControls);
     }
 
@@ -572,6 +609,12 @@ async function setTodoRepeat(
   await syncTodosToWatch();
 }
 
+async function setTodoReminder(id: string, remindMinute: number) {
+  todos = todos.map((t) => (t.id === id ? { ...t, remindMinute } : t));
+  renderTodos();
+  await syncTodosToWatch();
+}
+
 async function moveTodo(id: string, direction: -1 | 1) {
   const active = sortTodos(todos).filter((t) => !t.done);
   const idx = active.findIndex((t) => t.id === id);
@@ -681,12 +724,14 @@ todoForm.addEventListener("submit", async (e) => {
     done: false,
     priority: 0,
     ...repeatFields,
+    remindMinute: hhmmToMinute(todoRemind.value),
     sortOrder: nextSortOrder(todos),
     createdAt: Date.now(),
     completedAt: 0,
   });
   todoInput.value = "";
   todoRepeat.value = "0";
+  todoRemind.value = "";
   updateRepeatFormVisibility();
   renderTodos();
   await syncTodosToWatch();

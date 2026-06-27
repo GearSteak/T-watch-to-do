@@ -328,6 +328,10 @@ button:hover {
   width: 3.5rem;
 }
 
+.todo-remind {
+  max-width: 7rem;
+}
+
 .todo-daily-row {
   margin: 0.5rem 0;
 }
