@@ -46,6 +46,9 @@ const uploadProgressBar = document.getElementById("upload-progress-bar")!;
 
 let todos: TodoItem[] = [];
 let alarms: AlarmItem[] = [];
+// IDs the user deleted this session. Kept so the read-merge-write sync and the
+// watch's change-ping re-download don't resurrect a just-deleted task.
+const deletedTodoIds = new Set<string>();
 const faceCtx = faceCanvas.getContext("2d")!;
 let faceImage: HTMLImageElement | null = null;
 
@@ -410,7 +413,9 @@ function renderTodos() {
 }
 
 function setTodosFromPayload(payload: TodoPayload) {
-  todos = payload.items.filter((i) => !i.deleted).map(normalizeTodo);
+  todos = payload.items
+    .filter((i) => !i.deleted && !deletedTodoIds.has(i.id))
+    .map(normalizeTodo);
   renderTodos();
 }
 
@@ -434,9 +439,25 @@ function mergeTodoLists(remote: TodoItem[], local: TodoItem[]): TodoItem[] {
 
 async function syncTodosToWatch() {
   const remote = await withRetry(() => client.readTodos());
-  todos = mergeTodoLists(remote.items, todos);
+  // Merge the watch's list with ours so a stale client can't wipe items it
+  // never saw, then drop anything the user explicitly deleted this session.
+  // Without this filter the merge re-adds the just-deleted item from the watch.
+  todos = mergeTodoLists(remote.items, todos).filter((t) => !deletedTodoIds.has(t.id));
   renderTodos();
-  await client.writeTodos({ items: todos, fullSync: true });
+  // Send tombstones for deleted ids so the watch removes them too. fullSync
+  // alone won't delete them because we keep filtering them out of `todos`.
+  const tombstones: TodoItem[] = [...deletedTodoIds].map((id) => ({
+    id,
+    text: "",
+    done: false,
+    priority: 0,
+    repeat: 0,
+    sortOrder: 0,
+    createdAt: 0,
+    completedAt: 0,
+    deleted: true,
+  }));
+  await client.writeTodos({ items: [...todos, ...tombstones], fullSync: true });
 }
 
 function renderAlarms() {
@@ -588,6 +609,7 @@ async function toggleTodo(id: string) {
 }
 
 async function deleteTodo(id: string) {
+  deletedTodoIds.add(id);
   todos = todos.filter((t) => t.id !== id);
   renderTodos();
   await syncTodosToWatch();
